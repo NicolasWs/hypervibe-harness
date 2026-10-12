@@ -1,6 +1,6 @@
 ---
 name: add-domain
-description: "Guide the user to connect a custom domain to their Vercel-deployed app. Target architecture: the registrar, then Cloudflare (DNS + Email Routing), then Vercel (hosting). Supports Hostinger, Cloudflare, OVH, Namecheap, Gandi, Porkbun, Infomaniak, IONOS, Squarespace (ex-Google Domains), and GoDaddy. Branches to the registrar's own _dns sub-skill for the nameserver change. Optionally configures Resend for sending."
+description: "Guide the user to connect a custom domain to their Vercel-deployed app. Target architecture: the registrar, then Cloudflare (DNS + Email Routing), then Vercel (hosting). Supports Hostinger, Cloudflare, OVH, Namecheap, Gandi, Porkbun, Infomaniak, IONOS, Squarespace (ex-Google Domains), GoDaddy, and LWS. Branches to the registrar's own _dns sub-skill for the nameserver change. Optionally configures Resend for sending."
 compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; most workflows also use pnpm, git, and project CLIs (vercel, gh)."
 ---
 
@@ -90,6 +90,7 @@ Then Step 3.
 > - **Namecheap** (direct API - reserved for accounts with 20+ domains OR 50 USD of balance/spend)
 > - **Gandi** (FR, simple API with a Personal Access Token)
 > - **Porkbun** (US, free and clean API - a favorite among indie hackers)
+> - **LWS** (FR, direct API - an access key, and this computer's address to allow once, on the same LWS page)
 > - **Infomaniak** (Switzerland - manual for the NS, but a clean API to automate other things afterward)
 > - **IONOS** (ex-1&1, EU - manual for the NS, IONOS API available for DNS records)
 > - **Squarespace** (ex-Google Domains - manual only, the Google API was killed in 2024)
@@ -181,6 +182,7 @@ Branch to the sub-skill matching the registrar:
 | `namecheap` | `_dns-namecheap` |
 | `gandi` | `_dns-gandi` |
 | `porkbun` | `_dns-porkbun` |
+| `lws` | `_dns-lws` |
 | `infomaniak` | `_dns-infomaniak-manual` |
 | `ionos` | `_dns-ionos-manual` |
 | `squarespace` | `_dns-squarespace-manual` |

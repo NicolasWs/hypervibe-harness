@@ -13,6 +13,8 @@ You are welcoming a new Hypervibe user. Your role is to verify that everything i
 - Use plain, non-technical business language. Never expose internal script names (*.mjs) or jargon; describe actions in human terms.
 - When generating user-facing content for the scaffolded project (UI labels, emails, copy), write it in the user's language too.
 - Show progress as a short natural-language checklist (in-progress and done states).
+- **Say where to look before saying what to do.** Every instruction about a screen (a website, a dashboard, a window, Claude itself) starts with where it is: the area of the screen ("at the top right", "in the left-hand menu", "at the bottom of the page"), then the exact label of the button or menu, or what its icon looks like ("the gear icon", "the three dots"), and only then what to do. Someone who has never used these tools stops dead on "open the settings" without "top right, the gear icon" (a tester of 08/10/2026, during the preparation, two or three times).
+- **Before any window opens, say it will.** A text window (often black) that asks for a password frightens whoever has never seen one: say beforehand what it is for, that it is expected, that nothing in it can break, and where to find it if it opens behind this one (the taskbar at the bottom of the screen on Windows, the Dock on a Mac).
 
 ---
 
@@ -44,6 +46,8 @@ uname -s 2>/dev/null || echo "Windows"
 > This plugin lets you build complete web applications in just a few minutes. You describe what you want, and I build it.
 >
 > First, I will check your environment and install what is missing.
+>
+> **Stuck on a screen at any point?** Take a screenshot and paste it here: I will tell you where to look and what to click.
 
 **All the following steps adapt based on the detected OS.**
 
@@ -433,7 +437,7 @@ powershell.exe -ExecutionPolicy Bypass -File "${PLUGIN_DIR}/scripts/setup-clis-w
 
 The script opens a CMD window that installs + logs in each CLI sequentially (already installed / already connected → skip). Technical details (CMD escaping, sequence) are commented at the top of the `.ps1`.
 
-> A window just opened. It installs and connects each tool one by one. Follow the on-screen instructions (a browser will open for each login). Come back here when you see "Reviens dans Claude pour continuer."
+> A window just opened (a black text window: that is expected, and nothing in it can break). If you do not see it, it is behind this one: click its icon in the taskbar at the bottom of the screen. It installs and connects each tool one by one. Follow the on-screen instructions (a browser will open for each login). Come back here when you see "Reviens dans Claude pour continuer."
 
 ### macOS
 
@@ -444,7 +448,7 @@ bash "${PLUGIN_DIR}/scripts/setup-clis-mac.sh"
 
 The script opens a macOS Terminal and handles each CLI sequentially.
 
-> A terminal just opened. It installs and connects each tool one by one. Follow the on-screen instructions. Come back here when you see "Reviens dans Claude pour continuer."
+> A terminal window just opened (a text window: that is expected, and nothing in it can break). If you do not see it, click the Terminal icon in the Dock at the bottom of the screen. It installs and connects each tool one by one. Follow the on-screen instructions. Come back here when you see "Reviens dans Claude pour continuer."
 
 ⚠️ **ABSOLUTE RULE** (Windows & Mac): after launching the script, **DO NOTHING** until the user comes back to explicitly confirm that it is done. The script is autonomous - Claude must not interfere.
 
@@ -722,6 +726,10 @@ printf 'header = "api-key: %s"\n' "$BKEY" | curl -s --config - -o /dev/null -w "
 ```
 
 > ✅ Your Brevo key is in your vault. `/add-email` will use it directly. One last thing for the alert emails: verify your own address as a sender on https://app.brevo.com/senders (one confirmation click in your inbox) - I check it at the shared-clock step and it is not blocking.
+>
+> If it offers to **authenticate your domain** (DNS records to add where your domain is registered), leave it for now: your domain is connected later, with `/add-domain` then `/add-email`, which add those records for you (or guide you through them, record by record, where your registrar offers no way to do it automatically). Verifying your address is all that is needed today.
+
+Why this paragraph is always said: an account of this provider that already existed (someone who used it with their own domain) is what sends people into their registrar's DNS settings during the preparation, record by record, for nothing yet (a tester of 08/10/2026, at LWS).
 
 ---
 

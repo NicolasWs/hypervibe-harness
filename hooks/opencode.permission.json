@@ -178,7 +178,11 @@
       "*gh api*/merges*": "ask",
       "*gh api*PUT*/merge*": "ask",
       "*gh api*/merge*PUT*": "ask",
-      "*gh api*/rerun*": "ask"
+      "*gh api*/rerun*": "ask",
+      "*gh api*user/repos*-*": "ask",
+      "*gh api *-*user/repos*": "ask",
+      "*gh api*orgs/*/repos*-*": "ask",
+      "*gh api *-*orgs/*/repos*": "ask"
     }
   }
 }

@@ -100,7 +100,7 @@ Wait for the user to confirm they have created their account (and enabled 2FA). 
 
 ## Step 4 - Connection (dedicated window)
 
-> A window will open to connect you to your vault. Enter your email then your master password (you will see asterisks appear). **This information stays in the window, I never see it.**
+> A window will open to connect you to your vault: a text window, often black. **That is expected, and nothing in it can break**: a typo is undone by starting again. If you do not see it, it opened behind this one: look for it in the taskbar at the bottom of the screen (Windows) or in the Dock (Mac). Enter your email then your master password (you will see asterisks appear). **This information stays in the window, I never see it.**
 >
 > If **two-factor authentication** is enabled, a **code** will be requested right after: depending on your configuration it arrives in your **authenticator app** (Google Authenticator, etc.) or **by email** (the email is sent at the moment of connection, check your inbox). Copy the code into the window.
 

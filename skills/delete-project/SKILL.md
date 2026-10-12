@@ -442,7 +442,19 @@ Ordered list with click-by-click instructions:
 - Stripe products (if found): risk of being used by other projects
 - **The memory files kept for review**: every result `kept` of the memory step (under `deleted.memory.results`, or under `skipped.memory.results` when nothing was deleted at all: its `reason` then says how many). Name each file and say why it stayed: it mentions the project without being the project's own. The user decides what to do with it.
 
-### 4.4 Closing note
+### 4.4 The right to delete repositories, given back (only when section 2.6 asked for it in this run)
+
+`gh` keeps a right it was given until it is taken back (its own help says so): once the repository is gone, every later session could delete a repository, with only the guard's question in front of it. So when this run asked GitHub for that right (section 2.6, `Yes`), whatever became of the repository, ask via `AskUserQuestion`: *"I no longer need the right to delete repositories that GitHub gave me earlier. Do I give it back now? Same short code on a GitHub page."* Options: `Yes, give it back` / `No, keep it`.
+
+- **Yes** → in the background, exactly as in section 2.6 (the one-time code and the page `https://github.com/login/device`, given to the person; the command ends by itself once they have authorized; never on their behalf, never the page opened by you):
+  ```bash
+  gh auth refresh -h github.com --remove-scopes delete_repo
+  ```
+- **No**, or the command fails → one line: the right stays, and the same command gives it back whenever they like.
+
+When the right was already there before this run (`github.deletion.right.ok: true` at the inventory), leave it as it is and say so in one line, with that command. (A remark of Bastien Detraz, 10/10/2026.)
+
+### 4.5 Closing note
 > "There you go, the automatable cloud infrastructure is cleaned up. You still have the X manual actions above to finish the cleanup. No rush - you can do it at your own pace. If you want, I can stay here and guide you step by step when you click."
 
 ---

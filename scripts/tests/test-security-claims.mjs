@@ -424,7 +424,7 @@ check(
   const LISENT_DU_CONTENU_TIERS = [
     "_create-render-worker", "_dns-brevo", "_dns-cloudflare", "_dns-gandi",
     "_dns-godaddy-manual", "_dns-hostinger", "_dns-infomaniak-manual",
-    "_dns-ionos-manual", "_dns-namecheap", "_dns-ovh", "_dns-porkbun",
+    "_dns-ionos-manual", "_dns-lws", "_dns-namecheap", "_dns-ovh", "_dns-porkbun",
     "_dns-resend", "_dns-squarespace-manual", "_get-secret", "_setup-gsc",
     "_setup-indexnow", "_setup-render", "_setup-stripe-cli", "add-backup-db",
     "add-db", "add-email", "add-map", "add-stripe", "bootstrap", "eco-audit",

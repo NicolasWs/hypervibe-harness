@@ -258,6 +258,20 @@ for (const [label, seenAgo, pkgAgo, expected] of [
   check("... un bw qui ne répond pas est dit absent, la question posée avec le dossier", silent === false && asked[0] === m.target, JSON.stringify(asked));
 }
 
+// ── The window opens on what it is ────────────────────────────────────────────
+// A black window that asks for passwords is what frightened a tester of the preparation
+// (08/10/2026): every window says first what it is for, that Claude sees nothing of it and that
+// nothing in it can break, in the person's language.
+{
+  const { makeT } = await import(pathToFileURL(join(ROOT, "scripts", "vault", "i18n.mjs")).href);
+  const said = ["fr", "en"].map((lang) => makeT(lang)("reassure"));
+  check("la fenêtre du coffre se présente, en français comme en anglais : ce qu'elle est, que Claude n'en voit rien, qu'on n'y casse rien", /fenetre est normale/.test(said[0]) && /Claude ne voit rien/.test(said[0]) && /rien casser/.test(said[0]) && /window is expected/.test(said[1]) && /Claude sees nothing/.test(said[1]) && /nothing here can break/.test(said[1]), JSON.stringify(said));
+  const inter = readFileSync(join(ROOT, "scripts", "vault", "interactive.mjs"), "utf8");
+  const main = inter.slice(inter.lastIndexOf("(async () => {"));
+  const first = main.indexOf('console.log(t("reassure"))');
+  check("... et elle le dit avant toute chose, quelle que soit la commande", first > 0 && first < main.indexOf('if (cmd === "collect-env")'));
+}
+
 for (const d of temps) rmSync(d, { recursive: true, force: true });
 console.log(`\n${checks - failures}/${checks} verifications`);
 if (failures) {

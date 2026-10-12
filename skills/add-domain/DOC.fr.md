@@ -14,13 +14,13 @@ L'architecture cible : **votre registrar → Cloudflare (DNS + Email Routing) �
 
 1. **Domaine acheté ou non ?** Si vous n'en avez pas encore, Hypervibe vous recommande Hostinger (UI/support FR, .fr pris en charge, automatisation facile). Vous achetez en quelques minutes. Si vous êtes en Suisse, ou si vous voulez un domaine en `.ch`, elle vous propose aussi **Infomaniak** (registrar suisse, infrastructure en Suisse) : seul le changement de serveurs DNS s'y fait à la main, guidé clic par clic.
 
-2. **Identification du registrar** : chez qui le domaine est-il enregistré ? Hypervibe gère Hostinger, Cloudflare, OVH, Namecheap, Gandi et Porkbun de façon automatisée, et vous guide à la main chez Infomaniak, IONOS, Squarespace et GoDaddy, dont l'API ne permet pas cette opération.
+2. **Identification du registrar** : chez qui le domaine est-il enregistré ? Hypervibe gère Hostinger, Cloudflare, OVH, Namecheap, Gandi, Porkbun et LWS de façon automatisée, et vous guide à la main chez Infomaniak, IONOS, Squarespace et GoDaddy, dont l'API ne permet pas cette opération.
 
 3. **Vérification Cloudflare** : Hypervibe vérifie que votre token Cloudflare est valide. Sinon, elle vous renvoie vers `/start`.
 
 4. **Création de la zone Cloudflare** : Hypervibe ajoute votre domaine à votre compte Cloudflare et récupère les **2 nameservers** assignés.
 
-5. **Changement des nameservers chez le registrar** : selon votre registrar, Hypervibe appelle directement son API (Hostinger, OVH, Namecheap, Gandi, Porkbun…) avec votre clé d'accès rangée dans votre coffre-fort, et pousse les nouveaux nameservers. Pour les registrars dont l'API ne le permet pas (Infomaniak, IONOS, Squarespace, GoDaddy), vous le ferez à la main (instructions claires fournies).
+5. **Changement des nameservers chez le registrar** : selon votre registrar, Hypervibe appelle directement son API (Hostinger, OVH, Namecheap, Gandi, Porkbun, LWS…) avec votre clé d'accès rangée dans votre coffre-fort, et pousse les nouveaux nameservers (chez LWS, vous autorisez en plus une fois l'adresse de votre ordinateur, sur la page où se crée la clé). Pour les registrars dont l'API ne le permet pas (Infomaniak, IONOS, Squarespace, GoDaddy), vous le ferez à la main (instructions claires fournies).
 
 6. **Configuration des DNS records** : Hypervibe supprime les anciens records et ajoute ceux de Vercel (`A` apex → 76.76.21.21, `CNAME` www → `cname.vercel-dns.com`).
 

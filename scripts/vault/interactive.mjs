@@ -441,6 +441,8 @@ async function doCollectEnv() {
 
 (async () => {
   try {
+    // First, in every window: what it is, and that nothing here can go wrong.
+    console.log(t("reassure"));
     // collect-env writes to the project, not to the vault - so it must NOT
     // require bw to be installed. Handle it before the bw self-heal.
     if (cmd === "collect-env") {

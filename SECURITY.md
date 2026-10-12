@@ -83,8 +83,8 @@ deploy (also when one of the plugin's own scripts would do it), a schema push,
 cloud deletions, a hard reset, or the opt-in that lets a checkout's versioned
 git hooks run. It asks the same on the forge's command line: before a merge
 into the main branch or a deployment run again (both publish), and before what
-deletes, exposes or moves something there (a repository deleted, renamed, made
-public or transferred, a release or a secret removed, an access deleted), however
+deletes, exposes or moves something there (a repository deleted, renamed, created
+or made public, or transferred, a release or a secret removed, an access deleted), however
 gh is told to: the repository option before the verb, or the same gesture through
 its API. The rules never see the
 raw head of a command: `sudo`, `command`, `env`, `time`, a launcher (`npx`,

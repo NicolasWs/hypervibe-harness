@@ -251,6 +251,10 @@ check("the execution deletes the repository last, after the memory", exec.indexO
 const skill = readFileSync(join(ROOT, "skills", "delete-project", "SKILL.md"), "utf8");
 check("the skill asks gh for the right with the person, before the execution", /gh auth refresh -h github\.com -s delete_repo/.test(skill) && skill.indexOf("gh auth refresh -h github.com -s delete_repo") < skill.indexOf("## Phase 3"));
 check("... offers to keep the code repository, and lists the github category", /Keep the code repository/.test(skill) && /"memory","github"\]/.test(skill));
+// gh keeps a right until it is taken back (a remark of Bastien Detraz, 10/10/2026): the right the
+// run asked for is offered back at the end, after the report, never before the execution.
+const giveBack = skill.indexOf("gh auth refresh -h github.com --remove-scopes delete_repo");
+check("... and offers the right back at the end, once the report is given", giveBack > skill.indexOf("### 4.3") && skill.indexOf("### 4.3") > skill.indexOf("## Phase 3") && /Yes, give it back/.test(skill), `at ${giveBack}`);
 for (const doc of ["DOC.md", "DOC.fr.md"]) {
   const text = readFileSync(join(ROOT, "skills", "delete-project", doc), "utf8");
   check(`${doc} says which repository is deleted, and that /bootstrap made it`, /\/bootstrap/.test(text) && /delete_repo/.test(text), doc);

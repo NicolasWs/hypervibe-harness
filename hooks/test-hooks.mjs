@@ -143,6 +143,19 @@ expect("gh api -X PATCH repos/octo/demo -F private=false", "ask");
 expect("gh api --method PATCH /repos/octo/demo --field visibility=public", "ask");
 expect("gh api -X PATCH repos/octo/demo -f name=nouveau-nom", "ask");
 expect("gh api -X POST user/repos -f name=x -f visibility=public", "ask");
+// GitHub makes a repository public when the body says nothing (`private` defaults to false):
+// a creation asks unless it says private (Bastien Detraz, 10/10/2026).
+expect("gh api user/repos -f name=demo", "ask");
+expect("gh api -X POST user/repos -f name=demo", "ask");
+expect("gh api orgs/acme/repos -f name=demo", "ask");
+expect("gh api user/repos --input corps.json", "ask");
+expect("gh api user/repos -f name=demo -f visibility=private", "ask");
+expect("gh api orgs/acme/repos -f name=demo -f visibility=public -F private=true", "ask");
+expect("gh api user/repos -f name=demo -F private=false", "ask");
+expect("gh api user/repos -f name=demo -F private=true", "pass");
+expect("gh api orgs/acme/repos -f name=demo -f visibility=private", "pass");
+expect("gh api orgs/acme/repos -f name=demo -f visibility=internal", "pass");
+expect("gh api user/repos", "pass");
 expect("gh api -X PUT repos/octo/demo/pulls/12/merge", "ask");
 expect("gh api repos/octo/demo/merges -f base=main -f head=feature", "ask");
 expect("gh api -X POST repos/octo/demo/actions/runs/42/rerun", "ask");
@@ -711,10 +724,31 @@ console.log("\n── La table OpenCode : pas plus large que le garde-fou, la ou
     ["gh api -X PATCH repos/octo/demo -f description=x", "allow"],
     ["gh release list", "allow"],
   );
+  // A repository created through the API is public unless the body says otherwise (3.4.10, found
+  // by Bastien Detraz): the creations ask in both, and the bare read of the list passes in both.
+  dressed.push(
+    ["gh api user/repos -f name=demo", "ask"],
+    ["gh api -X POST user/repos -f name=demo", "ask"],
+    ["gh api -X POST /user/repos", "ask"],
+    ["gh api orgs/acme/repos -f name=demo", "ask"],
+    ["gh api user/repos --input corps.json", "ask"],
+    ['gh api "user/repos" -f name=demo', "ask"],
+    ["gh api -f name=demo orgs/my-org/repos", "ask"],
+    ["gh api user/repos", "allow"],
+    ["gh api orgs/my-org/repos", "allow"],
+  );
   const undressed = dressed.filter(([command, expected]) => openCodeSays(command) !== expected || hookSays(command) !== expected).map(([command]) => command);
   checks += 1;
   if (undressed.length) failures += 1;
   console.log(`${undressed.length ? "FAIL" : "OK  "} la table OpenCode lit un mot habille et une option abregee ou deplacee comme le garde-fou${undressed.length ? ` : ${undressed.join(" | ")}` : ""}`);
+
+  // Where a glob cannot tell, the table asks more, never less: `private=true` could be written
+  // inside another field's value, so a private creation asks in OpenCode, where the hook lets it by.
+  const privees = ["gh api user/repos -f name=demo -F private=true", "gh api orgs/acme/repos -f name=demo -f visibility=private"];
+  const laissees = privees.filter((command) => openCodeSays(command) !== "ask");
+  checks += 1;
+  if (laissees.length) failures += 1;
+  console.log(`${laissees.length ? "FAIL" : "OK  "} la table OpenCode demande aussi une creation privee, faute de pouvoir lire le champ${laissees.length ? ` : ${laissees.join(" | ")}` : ""}`);
 }
 
 console.log("\n── Robustesse (fail-open) ──");

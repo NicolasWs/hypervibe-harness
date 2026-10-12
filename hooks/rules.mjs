@@ -1630,6 +1630,23 @@ const REPO_PATH = "repos/[^/]+/[^/]+";
 /** A field that makes a repository public, or renames it. */
 const exposesOrRenames = (fields) => fields.some((f) => /^visibility=public$/i.test(f) || /^private=false$/i.test(f) || /^name=./.test(f));
 
+/** A repository created through the API, and public. GitHub makes it public unless the body says
+ *  otherwise: `private` defaults to false for POST user/repos and POST orgs/{org}/repos (REST
+ *  reference, version 2026-03-10, read on 12/10/2026; found by Bastien Detraz on 10/10/2026, where
+ *  the rule asked only when "public" was written out). So a creation asks unless it says private:
+ *  `private=true`, or, for an organisation's (the only one of the two that documents
+ *  `visibility`), a visibility of private or internal. A `visibility=public` asks whatever else is
+ *  said; a body sent from a file (`--input`) cannot be read here, and asks. */
+function createsPublicRepo(api) {
+  if (api.method !== "POST") return false;
+  const where = /^(user|orgs\/[^/]+)\/repos$/.exec(api.path);
+  if (!where) return false;
+  const visibility = api.fields.map((f) => /^visibility=(.*)$/i.exec(f)?.[1]).filter((v) => v !== undefined).map((v) => v.toLowerCase());
+  if (visibility.includes("public")) return true;
+  if (where[1] !== "user" && visibility.length && visibility.every((v) => v === "private" || v === "internal")) return false;
+  return !api.fields.some((f) => /^private=true$/i.test(f));
+}
+
 /** What publishes on the forge, read on `gh`'s own words: a pull request merged (on these
  *  projects the main branch is production), a deployment run again, and the same through the
  *  API (`PUT .../pulls/N/merge`, `POST .../merges`, `POST .../actions/runs/N/rerun`). */
@@ -1663,7 +1680,7 @@ function forgeDestroys(seg) {
   if (api.method === "DELETE" || api.methodUnread) return true;
   if (/(?:^|\/)transfer$/.test(api.path)) return true;
   if (api.method !== "GET" && new RegExp(`^${REPO_PATH}$`).test(api.path) && exposesOrRenames(api.fields)) return true;
-  return api.method === "POST" && /^(?:user|orgs\/[^/]+)\/repos$/.test(api.path) && api.fields.some((f) => /^visibility=public$/i.test(f) || /^private=false$/i.test(f));
+  return createsPublicRepo(api);
 }
 
 export function decide(command, inherited = new Map(), vars = new Map(), carried = false) {

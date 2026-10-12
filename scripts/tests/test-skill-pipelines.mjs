@@ -66,5 +66,21 @@ if (existsSync(join(ROOT, CONVERT))) {
   check("the person is told to point the site's hosting at apps/web before any push", /Root Directory[^\n]*apps\/web/.test(step("## Step 12")) && /before the next push/i.test(step("## Step 12")));
 }
 
+const ADD_DOMAIN = join("skills", "add-domain", "SKILL.md");
+if (existsSync(join(ROOT, ADD_DOMAIN))) {
+  // A registrar's sub-skill no row leads to is never run (LWS joined in 3.4.10 / 2.4.9): the
+  // person would be guided by hand at a registrar the harness knows how to drive.
+  console.log("\n── Chaque prestataire de domaine a sa route ──");
+  const routed = new Set([...read(ADD_DOMAIN).matchAll(/^\|\s*`[a-z]+`\s*\|\s*`(_dns-[a-z-]+)`/gm)].map((m) => m[1]));
+  // A registrar's sub-skill is the one that changes nameservers, and its description says so; the
+  // others (an email sender's records) are called by /add-domain on steps of their own.
+  const description = (d) => /^description:(.*)$/m.exec(read("skills", d, "SKILL.md"))?.[1] ?? "";
+  const registrars = readdirSync(join(ROOT, "skills")).filter((d) => d.startsWith("_dns-") && existsSync(join(ROOT, "skills", d, "SKILL.md")) && /nameserver/i.test(description(d)));
+  const unrouted = registrars.filter((d) => !routed.has(d));
+  check("every registrar's sub-skill has its row in /add-domain's routing table", registrars.length > 0 && unrouted.length === 0, unrouted.join(", "));
+  const missing = [...routed].filter((d) => !existsSync(join(ROOT, "skills", d, "SKILL.md")));
+  check("... and every row of that table leads to a sub-skill that exists", routed.size > 0 && missing.length === 0, missing.join(", "));
+}
+
 console.log(`\n${checks - failures}/${checks} checks`);
 process.exitCode = failures ? 1 : 0;

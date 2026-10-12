@@ -15,6 +15,9 @@
 
 const STRINGS = {
   en: {
+    // Said first, in every window: a black window that asks for passwords is what frightens
+    // people who have never seen one (a tester of 08/10/2026, during the preparation).
+    reassure: "This window is expected: it is here, and only here, that you type your passwords and keys.\nClaude sees nothing of what you type, and nothing here can break: a typo is undone by starting again. When it is done, simply go back to Claude.\n",
     pressEnter: "\nPress Enter to close...",
     installing: "Vault tool not found, running automatic installation...\n",
     bwMissing: "The vault tool was not found and automatic installation failed. Check your connection, or install it manually: https://bitwarden.com/help/cli/",
@@ -80,6 +83,7 @@ const STRINGS = {
   },
 
   fr: {
+    reassure: "Cette fenetre est normale : c'est ici, et seulement ici, que tu tapes tes mots de passe et tes cles.\nClaude ne voit rien de ce que tu y tapes, et tu ne peux rien casser : une faute de frappe se rattrape en recommencant. Quand c'est fini, reviens simplement dans Claude.\n",
     pressEnter: "\nAppuie sur Entree pour fermer...",
     installing: "Outil de coffre introuvable, installation automatique en cours...\n",
     bwMissing: "L'outil de coffre est introuvable et l'installation automatique a echoue. Verifie ta connexion, ou installe-le manuellement : https://bitwarden.com/help/cli/",

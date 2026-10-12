@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.4.10 (12 octobre 2026)
+
+### Nouveautés
+- **Les domaines achetés chez LWS** : `/add-domain` sait maintenant pointer tout seul un domaine LWS vers Cloudflare. Il lui faut une clé d'accès, à créer une fois dans ton espace LWS, et l'adresse de ton ordinateur, à autoriser sur la même page. Si LWS refuse, la marche à suivre à la main reste à une étape.
+
+### Améliorations
+- **Les fenêtres du coffre-fort se présentent** : chaque fenêtre où tu tapes un mot de passe ou une clé commence par dire ce qu'elle est, que Claude ne voit rien de ce que tu y tapes, et qu'une faute de frappe se rattrape en recommençant. Une testeuse avait été arrêtée par cette fenêtre noire pendant sa préparation.
+- **Une installation plus facile à suivre** : `/start` dit où regarder avant de dire quoi faire (la zone de l'écran, puis le bouton exact), te propose dès l'accueil de lui envoyer une capture d'écran si tu bloques, et annonce chaque fenêtre avant qu'elle s'ouvre, avec l'endroit où la retrouver si elle s'ouvre derrière Claude.
+- **Brevo sans détour par tes DNS** : si tu avais déjà un compte Brevo, `/start` te demande seulement de vérifier ton adresse d'expédition. L'authentification de ton domaine attend `/add-domain` puis `/add-email`, qui s'en chargent.
+- **Un dépôt créé par l'API de GitHub demande ton accord, sauf s'il est dit privé** : GitHub rend public un dépôt créé par son API quand la demande ne précise rien, et le garde-fou ne posait la question que si « public » était écrit en toutes lettres (relecture de Bastien Detraz).
+- **`/delete-project` te rend le droit de supprimer des dépôts** : GitHub garde ce droit tant qu'on ne le lui retire pas. Une fois le dépôt supprimé, la commande te propose de le rendre, avec le même petit code sur une page GitHub (relecture de Bastien Detraz).
+
+### Coulisses
+- Chaque point a sa recette, éprouvée en abîmant le code décision par décision. Une nouvelle vérification s'assure que chaque prestataire de domaine a sa route dans `/add-domain`.
+
 ## v3.4.9 (10 octobre 2026)
 
 ### Améliorations
