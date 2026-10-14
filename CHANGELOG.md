@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.4.12 (14 octobre 2026)
+
+### Améliorations
+- **/geo commence par l'essentiel : les robots d'IA peuvent-ils lire votre site ?** Hypervibe vérifie d'abord que le texte de vos pages est bien dans la page reçue (presque aucun robot d'IA n'exécute de JavaScript), qu'aucun pare-feu ne les refoule (le réglage Cloudflare est lu quand votre clé le permet), et ce que votre robots.txt leur dit.
+- **/geo s'appuie sur une liste datée et sourcée des robots d'IA** : chaque robot, son éditeur, son rôle (index de recherche d'un moteur IA, lecture à la demande, entraînement) et la page officielle qui le dit. Les trois options du robots.txt se construisent à partir d'elle. Elle corrige plusieurs erreurs : le robot de Google présenté à tort comme réglant les AI Overviews, des robots absents (dont celui de la recherche de ChatGPT), des noms périmés.
+- **/geo présente les paris comme des paris** : llms.txt (aucun grand moteur ne confirme le lire) et le balisage FAQ (Google n'en affiche plus les encarts depuis mai 2026) sont proposés, sans promesse.
+- **/geo vous aide à savoir si vous êtes cité** : les questions de vos clients, posées aux IA par vous, et le résultat gardé pour la fois suivante.
+- **/seo regarde aussi le site en ligne** : un noindex involontaire, l'adresse en .vercel.app qui double votre domaine, des redirections temporaires, des liens cassés, un plan du site qui liste des pages en erreur.
+- **/seo donne un score stable**, calculé sur une grille fixe et gardé dans le projet. Le volume de recherche n'est plus inventé : les chiffres de Search Console quand il est relié, sinon « inconnu ». Le référencement local entre dans l'audit.
+- **Le référencement de base des nouveaux projets** : l'adresse du site ne retombe plus sur localhost en production, le robots.txt nomme le plan du site, une image de partage est dessinée d'office.
+- **/gsc** propose de relier Bing Webmaster Tools, dont l'index sert aussi Copilot.
+- **/delete-project voit tout ce que le projet a chez Cloudflare** : toutes les zones du compte, tous leurs enregistrements et toutes leurs règles de routage d'adresses, page après page. Jusqu'ici, il s'arrêtait à la première page (50 zones, 200 enregistrements et 50 règles par zone), et une zone illisible passait pour une zone vide ; elle est désormais signalée.
+
+### Coulisses
+- La liste des robots d'IA est relue chaque semaine sur les pages officielles de leurs éditeurs.
+
 ## v3.4.11 (14 octobre 2026)
 
 ### Améliorations

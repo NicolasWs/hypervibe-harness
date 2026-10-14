@@ -83,6 +83,12 @@ const SUITES = [
   ["the vault's sign-in: one folder for every program on Windows, taken over by a copy", join(ROOT, "scripts", "tests", "test-bw-home.mjs")],
   ["the vault's unlock: one window at a time, none when the vault is already open", join(ROOT, "scripts", "tests", "test-vault-unlock.mjs")],
   ["a local payment test run by Claude: a test price checked, both started in the background, never a command to type", join(ROOT, "scripts", "tests", "test-stripe-local-test.mjs")],
+  ["the SEO a project receives: the site's address in one place, robots.txt with its sitemap, a share image drawn by next/og, earlier lines brought up to date (3.4.12)", join(ROOT, "scripts", "tests", "test-seo-setup.mjs")],
+  ["/seo's live checks, and the scores of /seo and /geo on a fixed grid kept in the project (3.4.12)", join(ROOT, "scripts", "tests", "test-seo-tools.mjs")],
+  ["Search Console's opportunities, read once for /gsc and /seo (3.4.12)", join(ROOT, "scripts", "tests", "test-gsc-opportunities.mjs")],
+  ["/delete-project reads every page of the Cloudflare zones, records and routing rules it looks through (3.4.12)", join(ROOT, "scripts", "tests", "test-delete-cloudflare-pages.mjs")],
+  ["/geo: the dated list of AI robots, the robots.txt rules built from it, a page as AI robots receive it, a skill that names no robot (3.4.12)", join(ROOT, "scripts", "tests", "test-geo.mjs")],
+  ["/geo reads whether Cloudflare turns AI robots away, read only (3.4.12)", join(ROOT, "scripts", "tests", "test-geo-cloudflare.mjs")],
 ];
 
 // The vault's tool never runs during a recette (_no-real-vault.mjs): every Node process of a suite

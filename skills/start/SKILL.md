@@ -305,6 +305,7 @@ Present a clear report:
 >    - Zone · Zone · Edit
 >    - Zone · DNS · Edit
 >    - Zone · Email Routing Rules · Edit
+>    - Zone · Bot Management · Read
 >    - Zone · Cache Purge · Purge
 > 5. **Account Resources**: Include All accounts
 > 6. **Zone Resources**: Include All zones

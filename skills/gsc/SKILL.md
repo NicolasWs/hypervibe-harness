@@ -182,6 +182,14 @@ printf 'header = "Authorization: Bearer %s"\n' "$TOK" | curl -s --config - "http
 ```
 > ✅ Sitemap submitted. Google will gradually visit each page. Status "pending" at first, that's normal.
 
+### 3.4 - Bing too (two minutes, optional)
+
+Bing's index also feeds Copilot (Microsoft says Bing and Copilot rest on the same crawl and index), and it is one of the search engines AI answers draw on. Bing Webmaster Tools, Bing's own console, imports a Search Console property in a few clicks: the site and its sitemap come over, already verified. Offer it once:
+
+> Bing (and Copilot, which answers from Bing's index) can know your site as well as Google does, in two minutes: on **https://www.bing.com/webmasters**, sign in, choose to import your sites from Google Search Console, and allow access to your Search Console account. Your site arrives verified, with its sitemap. Want to do it now?
+
+It is done by the user, on Bing's site (no key, nothing for this skill to store). If they did it, note it: `/geo` asks about it.
+
 ---
 
 ## Step 4 - Audit the GSC data
@@ -207,19 +215,19 @@ printf 'header = "Authorization: Bearer %s"\n' "$TOK" | curl -s --config - -X PO
 
 ### 4.3 - Performance (last 28 days)
 ```bash
-printf 'header = "Authorization: Bearer %s"\n' "$TOK" | curl -s --config - -X POST "https://www.googleapis.com/webmasters/v3/sites/sc-domain%3A<domain>/searchAnalytics/query" \
- -H "Content-Type: application/json" \
-  -d '{"startDate":"<D-28>","endDate":"<D>","dimensions":["query"],"rowLimit":100}'
+node "${CLAUDE_SKILL_DIR}/../../scripts/gsc/opportunities.mjs" --domain <domain>
 ```
-(Redo with `"dimensions":["page"]` for the top pages; without `dimensions` for the aggregate.)
+One read for this step and the next (read-only: the token is forged inside and never printed; exit codes as in the preamble, plus **6** when the property cannot be read yet: finish Steps 1 to 3 first). It covers the 28 days ending three days ago (Search Console's figures arrive late): say so.
 
-Present **Top 10 queries** and **Top 10 pages** as markdown tables (Query/Page | Impressions | Clicks | CTR | Average position), plus the **28-day Total**.
+Present **Top 10 queries** (`queries`) and **Top 10 pages** (`pages`) as markdown tables (Query/Page | Impressions | Clicks | CTR | Average position), plus the **28-day total** (`totals`).
 
 ### 4.4 - Opportunities (the most useful)
-Analyze for concrete recommendations in order of impact:
-- **Queries in position 11-20** (close to the top 10 -> small effort = big gain). List with impressions/position.
-- **High-volume queries but low CTR** (unengaging title/meta -> propose a rewrite).
-- **Zombie pages** (0 impressions over 28 days -> thin content / cannibalization / query too competitive).
+From the same output, in order of impact:
+- **Queries in position 11-20** (`nearTop`: close to the top 10 -> small effort = big gain). List with impressions, position and the page.
+- **Seen but rarely clicked** (`lowCtr`: on the first page, many impressions, under 2 % clicked: an unengaging title or description -> propose a rewrite).
+- **Zombie pages**: the sitemap's pages absent from `pages` (0 impressions over 28 days -> thin content / cannibalization / query too competitive).
+
+The thresholds are a rule of thumb (`rules` in the output): say so. `/seo` reads the same opportunities when it runs, and rewrites these pages' titles and descriptions first.
 
 For each, explain the concrete impact and propose an action (see teaching tone).
 

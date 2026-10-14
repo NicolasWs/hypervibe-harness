@@ -73,7 +73,7 @@ Check in the main layout and in each page that exports a `metadata` or `generate
 - **og:title**, **og:description**, **og:image**: defined for the main pages?
 - **og:type**: defined (website, article, etc.)?
 - **twitter:card**: defined (summary_large_image recommended)?
-- **OG image**: does an image exist in `/public` (1200x630px recommended)?
+- **Share image**: does the site have one? Either a file Next.js serves itself (`src/app/opengraph-image.tsx`, or a picture named `opengraph-image.png` in an `app/` folder), or a picture in `/public` that the metadata references and that exists (a reference to a missing `/og-image.png` is the classic: every share shows no picture). 1200x630px.
 
 ### HTML structure
 
@@ -85,9 +85,20 @@ Check in the main layout and in each page that exports a `metadata` or `generate
 
 ### Technical files
 
-- **robots.txt**: does it exist at the root? Does it allow crawling?
-- **sitemap.xml**: does it exist? Is it referenced in robots.txt?
+- **robots.txt**: served by Next.js from `src/app/robots.ts` (what `setup-seo.mjs` creates), or a static `public/robots.txt` (older projects: it cannot read the site's address, so it rarely names the sitemap). Does it allow crawling? Never both: with the two, Next.js serves the static file in production and silently ignores `robots.ts` (and answers an error on `/robots.txt` in development).
+- **sitemap.xml**: does it exist? Is it named in robots.txt (the `sitemap` field of `robots.ts`, or a `Sitemap:` line)?
 - **Canonical URLs**: do the pages have canonical URLs?
+- **The site's address**: do the metadata, the sitemap and robots.txt read it from `src/lib/site-url.ts` (`NEXT_PUBLIC_APP_URL`, else the production domain Vercel publishes)? A fallback written as `process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"` sends share previews, canonical addresses and the sitemap to localhost the day the variable is missing in production.
+
+### Local business (only if the site is one)
+
+Many sites are those of a freelancer, a shop, a practice, a restaurant: people look for them near where they are. Detect it from the content (an address, opening hours, a service area, "near you", a booking or a phone number put forward). If so, check:
+
+- **`LocalBusiness` structured data** (or its most precise subtype: `Restaurant`, `Dentist`, `HairSalon`...): Google requires the name and the full postal address, and recommends the telephone, the opening hours (`openingHoursSpecification`), the coordinates (`geo`, at least 5 decimals), the site's address (`url`) and the price range; a business that goes to its customers adds schema.org's `areaServed` (Google does not list it). Read Google's page on local business structured data before writing it: its lists change.
+- **The same name, address and telephone everywhere**: footer, contact page, legal notice, structured data, and the Google Business Profile. A difference (an old address, another number) blurs which business this is.
+- **The Google Business Profile**: does the site link to it, and does the profile name the site (on the profile: "Edit profile", then the Website field, the full address with its https://)? It is the business's card on Google Maps and in local results.
+
+If the site is not a local business, this point does not apply (`na` in the score).
 
 ### URLs and slugs
 
@@ -141,6 +152,27 @@ Accessibility influences Google ranking (Core Web Vitals + quality signals). Aud
 - **hreflang**: are the `<link rel="alternate" hreflang="...">` tags present (via `metadata.alternates.languages`)?
 - **Localized URLs**: does the sitemap include all language versions with `alternates`?
 
+### The live site (when it is deployed)
+
+Reading the code says what Google *could* see; the deployed site says what it *does* see. Some of the most damaging mistakes only show there. When the site has an address, run:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/seo/live-check.mjs" --url https://<domain> --vercel <project>.vercel.app
+```
+
+Give `--vercel` the production `*.vercel.app` address of the project (listed among its domains on Vercel) when the site has its own domain; leave it out otherwise. The script only reads, with a plain HTTP client: at most 30 pages of the sitemap and 100 internal links. Each finding carries its `check`, its `severity` and the address concerned. In the report, give each its consequence and its fix:
+
+- `noindex`, `sitemap-noindex`: the page will not appear on Google. If it is not meant, remove the `noindex` (the page's `robots` metadata, or an `X-Robots-Tag` header set in `next.config`, the middleware or `vercel.json`). `noindex-linked` (lower) may be meant: ask.
+- `local-address`, `vercel-address`: shares and Google are sent to localhost or to the `*.vercel.app` address. The fix is `src/lib/site-url.ts` (Step 3a).
+- `vercel-duplicate`, `duplicate-host`: the same pages answer at two addresses. Redirect the second to the domain permanently (on Vercel: a redirect scoped to that host in `vercel.json`; a redirect made in Vercel's dashboard is temporary, 307, by default: make it permanent), or make the canonical addresses name the domain.
+- `soft-404`: a page that does not exist answers 200 without being marked noindex: Google may index empty pages. Unknown routes must end in `notFound()` / `not-found.tsx`.
+- `temporary-redirect`: a move meant to be permanent answers 302 or 307. Use a permanent one (Next.js `redirects()` with `permanent: true` answers 308; Google takes 301 and 308 alike).
+- `broken-link`: fix the link, or redirect the old address.
+- `sitemap-redirect`, `sitemap-error`, `sitemap-not-canonical`: the sitemap lists only final, canonical, indexable addresses.
+- `robots-closed`, `robots-no-sitemap`: robots.txt closes the whole site, or does not name the sitemap.
+
+Not deployed yet: these checks do not apply (`na` in the score), and the report says they will be done once the site is online.
+
 ---
 
 ## Step 1b - Content and keyword audit
@@ -151,7 +183,7 @@ This step analyzes **content quality** for search optimization: positioning, key
 
 Read the site content in depth to understand the project:
 - Read the `CLAUDE.md`, the spec (`*.md` at the root), and the textual content of each page (h1, h2, paragraphs, CTA)
-- Read the translation files (`messages/*.json`) if i18n is configured
+- Read the translation files (`messages/*.json`) if i18n is configured: on a translated site the text is NOT in the JSX (the pages only hold keys like `t("hero.title")`), so every content step below (keywords, titles, readability, topic coverage) reads these files, one language at a time
 - Deduce: **what the site offers**, **to whom**, and **what the business goal is** (selling, generating leads, informing, etc.)
 
 Present the inference at the start of the report:
@@ -162,17 +194,35 @@ Present the inference at the start of the report:
 > - **Goal**: [conversion, awareness, leads, etc.]
 > - **Semantic universe**: [the 3-5 main themes of the site]
 
+### 1b.1b - What Search Console already says (when the site is connected)
+
+If the site is a Search Console property this machine can read (connected by `/gsc`), its real figures beat any guess:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/gsc/opportunities.mjs" --domain <domain>
+```
+
+- Exit code **0**: read. **2 / 3** (vault locked / session expired): warn the user, `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking), retry. **4** (Search Console not set up on this machine) or **6** (the site is not connected yet): skip this step without insisting, and suggest `/gsc` in Step 5b. Never hold the audit back for it.
+- What it gives, and how this audit uses it:
+  - `queries`: the queries that showed the site, with impressions, clicks, CTR and average position: the impressions column of 1b.2.
+  - `nearTop` (positions 11 to 20, with impressions): pages one step away from Google's first page. Their titles and descriptions are rewritten **first** in 1b.3 and 1b.4.
+  - `lowCtr` (on the first page, many impressions, under 2 % clicked): the page is seen but not chosen. Its title and description get a rewrite that makes one want to click.
+  - `pages`: each page's figures.
+- Say in the report that the figures cover the last 28 days, ending three days ago (Search Console's delay), and that the thresholds (`rules` in the output) are a rule of thumb.
+
 ### 1b.2 - Recommended keywords
 
 From the inferred positioning:
 
 1. **Propose 10-15 main keywords** the site should target, ranked by priority:
-   - 3-5 main keywords (short tail, high competition, high volume)
-   - 5-10 long-tail keywords (more specific, less competitive, strong intent)
+   - 3-5 main keywords (short, general, very contested)
+   - 5-10 long-tail keywords (more specific, less contested, strong intent)
 
-2. **Use Google Suggest** to validate and enrich: for each main keyword, do a WebFetch on `https://suggestqueries.google.com/complete/search?client=firefox&hl=fr&q=MOT_CLE` to retrieve real search suggestions. Add the relevant suggestions to the list.
+2. **Use Google Suggest** (the suggestions Google shows while one types) to validate and enrich: for each main keyword, a WebFetch on `https://suggestqueries.google.com/complete/search?client=firefox&hl=fr&q=MOT_CLE`. It is an undocumented endpoint: one call per main keyword, no more, and if it stops answering, go on without it. **Never fetch Google's results pages** ("People also ask", "Related searches"): Google's terms forbid automated access to them, and they answer an automated client with a CAPTCHA.
 
-3. **Check the presence of the keywords** in the current site:
+3. **Search volume: never estimated.** No free source gives it, and an invented "high / medium" misleads more than it helps. When Search Console is connected (1b.1b), give each keyword's **impressions over 28 days** (how many times Google showed the site for it); otherwise write **"unknown"**.
+
+4. **Check the presence of the keywords** in the current site:
    - Is the main keyword in the `<title>` of the home page?
    - Is it in the `h1`?
    - Is it in the `meta description`?
@@ -181,14 +231,14 @@ From the inferred positioning:
 
 Present as a table:
 
-> | Keyword | Estimated volume | Present in title | Present in h1 | Present in description | Targeted page |
+> | Keyword | Impressions (Search Console, 28 days) | Present in title | Present in h1 | Present in description | Targeted page |
 > |---------|--------------|-------------------|----------------|------------------------|-------------|
-> | keyword 1 | high | ✅ | ✅ | ❌ | / |
-> | keyword 2 | medium | ❌ | ❌ | ❌ | none |
+> | keyword 1 | 1,240 | ✅ | ✅ | ❌ | / |
+> | keyword 2 | unknown | ❌ | ❌ | ❌ | none |
 
 ### 1b.3 - Title analysis
 
-For each page, evaluate the `<title>`:
+Start with the pages Search Console points out (1b.1b: `nearTop`, then `lowCtr`), when it does: there a rewrite has the most to gain. Then, for each page, evaluate the `<title>`:
 
 - **Length**: 50-60 characters (beyond that, Google truncates)
 - **Main keyword**: is it present, ideally at the start?
@@ -204,7 +254,7 @@ For each title to improve, propose a **rewrite**:
 
 ### 1b.4 - Meta description analysis
 
-For each page, evaluate the `meta description`:
+Same order: the pages Search Console points out first, when it does. For each page, evaluate the `meta description`:
 
 - **Length**: 150-160 characters (beyond that, Google truncates)
 - **Main keyword**: is it present naturally?
@@ -221,14 +271,14 @@ Check the consistency between each page's content and its metadata:
 - Does the `h1` reflect the `title` and the `description`?
 - Does the page content cover the targeted keyword in depth?
 - Are there pages targeting the same keyword (cannibalization)?
-- Does each important page have at least 300 words of content?
+- Is each important page substantial enough to answer the question it targets? Around 300 words is a **benchmark** for a page that must explain something, never a rule: Google says it has no preferred word count, and a contact or booking page is right to be short.
 - Do the internal links connect the pages to each other in a logical way?
 
 ### 1b.6 - Readability (Flesch-Kincaid adapted for FR)
 
 Measure the **reading ease** of each page's textual content. Google prefers accessible content (better engagement, longer reading time).
 
-For each important page, extract the visible text (h1, h2, h3, paragraphs, lists, ignore code, button labels, navs) and compute the Flesch score adapted to French:
+For each important page, extract the visible text (h1, h2, h3, paragraphs, lists, ignore code, button labels, navs) and compute the Flesch score adapted to French. On a translated site, the text is in the translation files: the script below reads a `messages/<locale>.json` as well (all its texts, at any depth), one language at a time.
 
 ```
 Score FR = 207 - 1.015 × (words / sentences) - 73.6 × (syllables / words)
@@ -239,7 +289,11 @@ Simple inline node implementation:
 ```bash
 node -e "
 const fs = require('fs');
-const text = fs.readFileSync(process.argv[1], 'utf8')
+const raw = fs.readFileSync(process.argv[1], 'utf8');
+// A translation file: its texts are its values, at any depth.
+const values = (o) => typeof o === 'string' ? [o] : (o && typeof o === 'object' ? Object.values(o).flatMap(values) : []);
+const source = process.argv[1].endsWith('.json') ? values(JSON.parse(raw)).join('. ') : raw;
+const text = source
   .replace(/<[^>]+>/g, ' ')           // strip HTML/JSX tags
   .replace(/\{[^}]+\}/g, ' ')         // strip JSX expressions
   .replace(/\s+/g, ' ').trim();
@@ -261,25 +315,26 @@ console.log('Flesch FR:', score.toFixed(1), '| Words:', wordCount, '| Sentences:
 **In the report**, flag the pages whose score does not match the target detected in Step 1b.1:
 > *"Your `/services` page targets 'small and medium businesses' but its readability score is 28 (very technical). Sentences too long (22 words on average). I recommend cutting into shorter sentences and removing the jargon."*
 
-### 1b.7 - Semantic co-occurrences (topical depth)
+### 1b.7 - Topic coverage (entities and sub-topics)
 
-For each important page, check that the content covers the **semantic field** around the target keyword, not just the keyword itself. Google expects to see related terms to consider that a topic is covered in depth (the "LSI keywords" / latent semantic indexing concept).
+For each important page, check that the content covers its **topic**, not just its keyword: the entities (people, places, products, concepts) and the sub-topics a reader of the page expects to find. A page that answers the questions around its subject is the one search engines, and AI answer engines, choose. (This replaces what SEO tools called "LSI keywords": Google has said it does not use latent semantic indexing. What holds is coverage, not a list of words to place.)
 
 Method:
 
-1. **Generate the list of expected terms** for each target keyword. Two approaches:
-   - **Via Google Suggest**: WebFetch `https://suggestqueries.google.com/complete/search?client=firefox&hl=fr&q=<keyword>` → extract the 10 suggestions (these are the most frequent associated queries)
-   - **Via "People Also Ask" / related searches**: WebFetch the Google search page for the keyword (with user-agent), extract the "People also ask" and "Related searches"
-2. **Grep each term** in the textual content of the target page
-3. **Coverage score**: number of terms found / total number expected
+1. **List the expected entities and sub-topics** for each target keyword:
+   - **The Google Suggest suggestions** read in 1b.2 (the questions people attach to the keyword);
+   - **What the subject itself calls for**: the steps, the prices, the places, the people, the objections a reader will have. Reason about the subject, do not collect words.
+   - Never fetch Google's results pages ("People also ask", "Related searches"): see 1b.2.
+2. **Look for each one** in the page's text (its translation file on a translated site)
+3. **Coverage**: found / expected. A hint for the writer, not a score to reach.
 
 Present:
 
 > **Page /services targets "AI in business"**:
-> - Expected semantic terms (Google Suggest): digital transformation, automation, ROI, use cases, productivity, training, adoption, benefits, implementation, governance
-> - Found in your content: 3/10 (automation, productivity, training)
-> - Missing: digital transformation, ROI, use cases, adoption, benefits, implementation, governance
-> - **Suggested action**: enrich your page with 2-3 paragraphs covering the most relevant missing terms (digital transformation, ROI, use cases) to show Google that you cover the topic in depth.
+> - Expected entities and sub-topics: digital transformation, automation, cost and return, use cases, productivity, training, adoption, governance
+> - Covered: 3/8 (automation, productivity, training)
+> - Not covered: digital transformation, cost and return, use cases, adoption, governance
+> - **Suggested action**: add 2-3 paragraphs on the questions a reader asks first (what it costs and returns, concrete use cases): the page then answers its subject instead of naming it.
 
 ### 1b.8 - Content freshness
 
@@ -288,7 +343,7 @@ Google prefers recent content (especially for YMYL topics: Your Money Your Life 
 - **`<time datetime="...">`** on article/blog type pages: present?
 - **Date shown in the HTML**: grep "publié le", "mis à jour le", "modifié le", `<time>` in the article templates. Flag if an article has no visible date
 - **JSON-LD Article schema**: if `Article` schemas exist, do they check `datePublished` AND `dateModified`?
-- **Sitemap `lastmod`**: does `sitemap.ts` generate a `lastModified` for each URL (or is it a fixed / absent date)? A real dynamic `lastmod` signals recently updated pages to Google
+- **Sitemap `lastmod`**: when `sitemap.ts` gives a `lastModified`, is it the page's real date of change (a post's update date)? The build's date written on every page is worse than none: Google only trusts `lastmod` when it is consistently accurate. Absent is fine.
 
 **In the report**:
 > *"Your article `/blog/mon-post` has no visible date in the HTML. Google can't know when it was written, and neither can the readers. Add a line `<time dateTime=\"2026-04-19\">Publié le 19 avril 2026</time>` at the top of the article."*
@@ -339,7 +394,21 @@ Present the two reports together:
 > - No robots.txt
 > - No alt attribute on 3 images
 >
-> **Overall score: X/Y**
+> **Score: X/Y (Z %)** - previously X'/Y' on <date>
+
+**The score is computed, never judged.** The same site must give the same score twice, and two passes must compare. Read the fixed grid (every check, its weight):
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/seo/report.mjs" grid --skill seo
+```
+
+Give EVERY check of the grid its status, in a temporary file outside the project: `{"checks": {"<id>": {"status": "ok|warn|fail|na", "note": "<one line>"}}}`. `na` when the check does not apply (no i18n, not a local business, not deployed yet), never a check left out. Then record the pass:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/seo/report.mjs" record --skill seo --file <results.json> --site https://<domain>
+```
+
+It computes the score (`ok` counts the weight, `warn` half, `fail` nothing, `na` leaves the check out of the maximum), keeps it in the project in `.hypervibe/seo-report.json` (versioned with the code; `/geo` reads it too), and gives the previous pass on the same grid. Show the score with its scale, and the previous one when there is one.
 
 ---
 
@@ -351,9 +420,9 @@ Ask the user:
 
 If the user accepts, fix in this order:
 
-### 3a - Missing basics (metadata, robots.txt, sitemap, JSON-LD WebSite)
+### 3a - Missing basics (metadata, robots.txt, sitemap, JSON-LD WebSite, share image)
 
-If **none** of the three files `src/app/sitemap.ts`, `public/robots.txt`, or an enriched metadata with `metadataBase` exists → run the plugin's init script:
+Run the plugin's init script if **none** of these exists: `src/app/sitemap.ts`, a robots.txt (`src/app/robots.ts` or `public/robots.txt`), an enriched metadata with `metadataBase`. Run it too when the project still carries what an earlier version of the plugin wrote: the fallback `process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"` in the layout or the sitemap, a static `public/robots.txt` that names no sitemap, a reference to an `/og-image.png` that does not exist.
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/../../scripts/setup-seo.mjs" \
@@ -362,7 +431,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/setup-seo.mjs" \
   --locale fr_FR
 ```
 
-The script creates/updates layout.tsx (metadata + minimal JSON-LD WebSite + html lang), `public/robots.txt`, `src/app/sitemap.ts`. It is idempotent.
+The script creates or updates `src/lib/site-url.ts` (the site's address: `NEXT_PUBLIC_APP_URL`, else the production domain Vercel publishes, localhost only on this machine), the layout (metadata, minimal JSON-LD WebSite, html lang), `src/app/robots.ts` (with the sitemap's address), `src/app/sitemap.ts`, and `src/app/opengraph-image.tsx` (a share image drawn from the name and description, when the site has none). It is idempotent. On an existing project it only rewrites what an earlier version wrote, word for word: a file the project changed is left as it is, and the script says so (a changed `public/robots.txt` is kept: check by hand that it names the sitemap).
 
 If a part already exists but is incomplete → manually patch only the missing piece (the script preserves existing files).
 
@@ -372,12 +441,12 @@ The script creates the sitemap with just `/`. Update it to reflect the real stat
 
 1. Scan all the `page.tsx` to list the routes
 2. Exclude the noindex pages (admin, preferences)
-3. Priorities: 1.0 (home), 0.8-0.9 (key pages), 0.7 (secondary), 0.3 (legal)
+3. No `priority` nor `changeFrequency`: Google ignores both. A `lastModified` only with a page's real date of change (a post's update date, read where the post keeps it), never the build's date
 4. If i18n: one entry per locale per page + `alternates.languages` for the hreflang
 
 ### 3c - Open Graph image
 
-If `public/og-image.png` does not exist, create a placeholder and note in the summary that the user will need to replace it with a real image (1200×630).
+If the site has no share image, the script of 3a draws one with next/og from the site's name and description (`src/app/opengraph-image.tsx`, served by Next.js with its `og:image` tags): every shared link shows a picture at once. Suggest, without insisting, replacing it one day with a designed picture (an `opengraph-image.png` in `src/app/`, 1200×630).
 
 ### 3d - HTML: alt, headings, semantics
 
@@ -436,11 +505,11 @@ For each a11y problem flagged in Step 1:
 
 ## Step 4 - Verification
 
-After the fixes, re-run the audit quickly and display the new score.
+After the fixes, re-run the audit quickly, give every check of the grid its new status, and record this second pass the same way (`report.mjs record --skill seo`): the score before the fixes is its reference.
 
-> ✅ **SEO audit complete.** Score: X/Y → X/Y
+> ✅ **SEO audit complete.** Score: X/Y → X'/Y'
 >
-> One manual point remains: replace the placeholder Open Graph image (`/public/og-image.png`) with a real image from your site (1200x630px).
+> What remains in your hands: <the points left to the user, if any>. The checks of the live site will run once your fixes are deployed.
 
 ---
 
@@ -465,11 +534,11 @@ The audit we just did prepares you for **classic Google**. Two complementary dir
 
 ### 5a - Optimize for AI (doable immediately)
 
-Today, people also search via **ChatGPT, Claude, Perplexity, Google AI Overviews, Bing Chat**. The signals for being **cited by AIs** are not quite the same as for showing up in Google results. The `/geo` skill does a dedicated audit (`llms.txt`, rules for AI crawlers, FAQPage schema, Q&A format, citability signals), no need to wait for the site to have traffic.
+Today, people also search via **ChatGPT, Claude, Perplexity, Google AI Overviews, Bing Chat**. The signals for being **cited by AIs** are not quite the same as for showing up in Google results. The `/geo` skill does a dedicated audit: whether AI robots can read the pages at all (most of them run no JavaScript, and a firewall can turn them away), the rules robots.txt gives them, then what makes a page citable. No need to wait for the site to have traffic. It reads the report this audit left in `.hypervibe/seo-report.json` instead of checking the same points twice.
 
 ### 5b - Connect to Google Search Console (recommended now, useful in 2-4 weeks)
 
-Google Search Console (GSC) gives you the **real Google data**: which queries bring traffic, which pages are indexed, your real CTR. The best is to **connect the site now** (so Google starts collecting right away) and come back to see the data in 2 to 4 weeks. The `/gsc` skill handles it from A to Z: adding the property, automatic DNS verification, sitemap submission, and first audit.
+Google Search Console (GSC) gives you the **real Google data**: which queries bring traffic, which pages are indexed, your real CTR. The best is to **connect the site now** (so Google starts collecting right away) and come back to see the data in 2 to 4 weeks. The `/gsc` skill handles it from A to Z: adding the property, automatic DNS verification, sitemap submission, and first audit. Once it is connected, this audit reads Search Console's figures itself (1b.1b): the next `/seo` rewrites first the pages Google already shows. `/gsc` also offers to connect Bing Webmaster Tools by importing the Search Console property.
 
 ### Inviting the user
 

@@ -34,6 +34,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { ensureSiteUrl } from "./_site-url.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -151,6 +152,10 @@ export default getRequestConfig(async ({ requestLocale }) => {
 );
 actions.push(`✓ ${join(i18nDir, "request.ts")}`);
 
+// The site's address, read by the metadata and the sitemap below (3.4.12: no localhost in
+// production when NEXT_PUBLIC_APP_URL is missing there).
+actions.push(`✓ ${join(webDir, "src/lib/site-url.ts")}: ${ensureSiteUrl(webDir) === "created" ? "created" : "already exists"}`);
+
 // ─── 2bis. src/i18n/metadata.ts (per-page canonical + hreflang) ──────
 // canonical/hreflang MUST be set per page, never in a layout: Next.js
 // inherits layout metadata, so a layout-level `alternates` makes every
@@ -158,9 +163,10 @@ actions.push(`✓ ${join(i18nDir, "request.ts")}`);
 // as duplicates of the home - bug shipped to hyperprompt/hyperarme).
 writeFileSync(
   join(i18nDir, "metadata.ts"),
-  `import { routing } from "./routing";
+  `import { siteUrl } from "~/lib/site-url";
+import { routing } from "./routing";
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const baseUrl = siteUrl();
 
 // Per-page canonical + hreflang alternates.
 // Usage, from a page's generateMetadata:
@@ -239,13 +245,14 @@ import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { routing } from "~/i18n/routing";
+import { siteUrl } from "~/lib/site-url";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const baseUrl = siteUrl();
 
   // metadataBase only. canonical + hreflang are set PER PAGE via
   // localeAlternates() from ~/i18n/metadata. Never add \`alternates\` here:
@@ -438,9 +445,8 @@ if (!existsSync(sitemapPath)) {
       }
       return {
         url: \`\${baseUrl}\${localePath}\`,
-        lastModified: new Date(),
-        changeFrequency: page.changeFrequency,
-        priority: page.priority,
+        // A page's real date of change only, never the build's; Google ignores changefreq and priority.
+        ...("lastModified" in page && page.lastModified instanceof Date ? { lastModified: page.lastModified } : {}),
         alternates: { languages: alternates },
       };
     }),

@@ -34,6 +34,7 @@ import { vercelContext, listAllProjects, getProject, pickTargets } from "../_ver
 import { tokenMatches, tokenMatchCount, moreSpecificOwner, normalizeName } from "../_match.mjs";
 import { manifestExistant } from "../manifest/locate.mjs";
 import { matchOf, projectRepository } from "./_render-match.mjs";
+import { cloudflareAll } from "./_cloudflare-pages.mjs";
 import { githubRepositoryOf, sameRepository, settleGithubDeletion } from "./_github-repo.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -308,24 +309,23 @@ async function scanR2() {
 }
 
 // ─── 5. Cloudflare DNS (all zones) ─────────────────────────────────────────
+// Every zone and every record, page after page (_cloudflare-pages.mjs); a zone whose records
+// could not be read is said in `error`, never taken for a zone without the project's records.
+const cloudflareJson = (url) => httpJson(url, { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } });
+
 async function scanDns() {
   if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN") };
   try {
-    const zonesData = await httpJson(
-      "https://api.cloudflare.com/client/v4/zones?per_page=50",
-      { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } },
-    );
-    if (zonesData.__error) return { found: false, error: zonesData.__error };
-    const zones = zonesData.result || [];
+    const listed = await cloudflareAll("/zones", 50, cloudflareJson);
+    if (listed.error) return { found: false, error: listed.error };
+    const zones = listed.items;
     const allRecords = [];
+    const unread = [];
     await Promise.all(
       zones.map(async (z) => {
-        const recs = await httpJson(
-          `https://api.cloudflare.com/client/v4/zones/${z.id}/dns_records?per_page=200`,
-          { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } },
-        );
-        if (recs.__error) return;
-        for (const r of recs.result || []) {
+        const recs = await cloudflareAll(`/zones/${z.id}/dns_records`, 100, cloudflareJson);
+        if (recs.error) unread.push(`${z.name}: ${recs.error}`);
+        for (const r of recs.items) {
           const nameMatches = tokenMatches(PROJECT_LOWER, r.name);
           const contentMatches = tokenMatches(PROJECT_LOWER, r.content || "");
           if (nameMatches || contentMatches) {
@@ -341,7 +341,7 @@ async function scanDns() {
         }
       }),
     );
-    return { found: allRecords.length > 0, records: allRecords, zonesScanned: zones.length };
+    return { found: allRecords.length > 0, records: allRecords, zonesScanned: zones.length, ...(unread.length ? { error: `records not read in ${unread.join(" | ")}` } : {}) };
   } catch (e) {
     return { found: false, error: String(e) };
   }
@@ -513,21 +513,17 @@ async function scanUpstash() {
 async function scanEmailRouting() {
   if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN") };
   try {
-    const zonesData = await httpJson(
-      "https://api.cloudflare.com/client/v4/zones?per_page=50",
-      { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } },
-    );
-    if (zonesData.__error) return { found: false, error: zonesData.__error };
-    const zones = zonesData.result || [];
+    const listed = await cloudflareAll("/zones", 50, cloudflareJson);
+    if (listed.error) return { found: false, error: listed.error };
+    const zones = listed.items;
     const rules = [];
+    const unread = [];
     await Promise.all(
       zones.map(async (z) => {
-        const data = await httpJson(
-          `https://api.cloudflare.com/client/v4/zones/${z.id}/email/routing/rules?per_page=200`,
-          { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } },
-        );
-        if (data.__error) return;
-        for (const r of data.result || []) {
+        // Cloudflare serves these rules 50 at a time, whatever size is asked.
+        const data = await cloudflareAll(`/zones/${z.id}/email/routing/rules`, 50, cloudflareJson);
+        if (data.error) unread.push(`${z.name}: ${data.error}`);
+        for (const r of data.items) {
           const matchersStr = JSON.stringify(r.matchers || []);
           const actionsStr = JSON.stringify(r.actions || []);
           if (
@@ -538,7 +534,9 @@ async function scanEmailRouting() {
             rules.push({
               zoneId: z.id,
               zoneName: z.name,
-              tag: r.tag,
+              // `tag` is what execute-deletions.mjs removes the rule by; Cloudflare documents it
+              // as replaced by `id` (both carried on 14/10/2026), so `id` stands in when it goes.
+              tag: r.tag ?? r.id,
               name: r.name,
               matchers: r.matchers,
               actions: r.actions,
@@ -548,7 +546,7 @@ async function scanEmailRouting() {
         }
       }),
     );
-    return { found: rules.length > 0, rules };
+    return { found: rules.length > 0, rules, ...(unread.length ? { error: `routing rules not read in ${unread.join(" | ")}` } : {}) };
   } catch (e) {
     return { found: false, error: String(e) };
   }

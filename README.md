@@ -75,9 +75,9 @@ When you launch `/bootstrap`, you choose how to describe your app:
 | `/spec` | Build a detailed project specification, step by step |
 | `/start` | First-time onboarding: checks prerequisites, presents all commands |
 | `/prof` | Explains how everything works in plain language (pedagogical mode) |
-| `/seo` | Audit SEO and fix issues (metadata, sitemap, OG, structure, URLs/slugs, accessibility, readability, topical depth, freshness) |
-| `/geo` | Audit and optimize for AI answer engines (ChatGPT, Claude, Perplexity, Google AI Overviews) - llms.txt, AI crawler policy, FAQPage schema, citability signals, E-E-A-T, Q&A format. Complementary to `/seo`. |
-| `/gsc` | Connect the site to Google Search Console, verify DNS automatically, submit the sitemap, then audit what Google actually sees - indexing coverage, top queries, quick wins (positions 11-20), low CTR pages, zombie pages. Complementary to `/seo` (external Google data). |
+| `/seo` | Audit SEO and fix issues (metadata, sitemap, share image, structure, URLs/slugs, accessibility, readability, topic coverage, freshness, local business), plus what only the live site shows (an unintended noindex, a duplicate address, temporary redirects, broken links, the sitemap's errors). A score computed on a fixed grid, kept in the project to compare passes |
+| `/geo` | Audit and optimize for AI answer engines (ChatGPT, Claude, Perplexity, Gemini, Copilot): first whether AI robots can read the pages (text without JavaScript, a firewall that turns them away, robots.txt rules built from a dated and sourced list of AI robots), then citability, E-E-A-T, Q&A format. llms.txt and FAQ markup offered as what they are: bets. Complementary to `/seo`. |
+| `/gsc` | Connect the site to Google Search Console, verify DNS automatically, submit the sitemap, then audit what Google actually sees - indexing coverage, top queries, quick wins (positions 11-20), low CTR pages, zombie pages, read by `/seo` too; offers to connect Bing Webmaster Tools by importing the property. Complementary to `/seo` (external Google data). |
 | `/security` | Security audit (secrets, auth, headers, dependencies, RGPD) |
 | `/accessibility` | Accessibility audit: reads the code (images, buttons, form fields, keyboard, focus, zoom), measures the live pages, explains each problem in plain words, then applies the fixes you approve |
 | `/rgpd-audit` | RGPD compliance audit - detects third-party services in use, updates the subprocessors registry, generates or refreshes the privacy policy page |
