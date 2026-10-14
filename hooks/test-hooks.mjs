@@ -749,6 +749,34 @@ console.log("\n── La table OpenCode : pas plus large que le garde-fou, la ou
   checks += 1;
   if (laissees.length) failures += 1;
   console.log(`${laissees.length ? "FAIL" : "OK  "} la table OpenCode demande aussi une creation privee, faute de pouvoir lire le champ${laissees.length ? ` : ${laissees.join(" | ")}` : ""}`);
+
+  // Un changement chez un registraire (3.4.11, revue externe de la 3.4.10) : la table demande comme
+  // le garde-fou. Elle ne sait pas lire ce que chaque registraire appelle une lecture (Porkbun lit
+  // par POST, Namecheap ecrit par GET) : elle demande pour tout appel a un registraire, et pour
+  // tout appel du script OVH du plugin, lectures comprises. Plus que le garde-fou, jamais moins.
+  const registraires = [
+    `curl -s -X PUT "https://api.lws.net/v1/domain/example.fr/dns" -d '{"ns1":"a"}'`,
+    `curl -s -X PUT "https://developers.hostinger.com/api/domains/v1/portfolio/example.fr/nameservers" -d '{}'`,
+    `curl -s -X PUT "https://api.gandi.net/v5/domain/domains/example.fr/nameservers" -d '{}'`,
+    `curl -s -X POST "https://api.porkbun.com/api/json/v3/domain/updateNs/example.fr" --data @-`,
+    `curl -s -X POST "https://eu.api.ovh.com/1.0/domain/example.fr/nameServers/update" --data @-`,
+    `curl -s -G "https://api.namecheap.com/xml.response" --data-urlencode "Command=namecheap.domains.dns.setCustom"`,
+    `node "C:/p/scripts/registrar-ovh.mjs" set-nameservers example.fr a.ns.cloudflare.com b.ns.cloudflare.com`,
+  ];
+  const ecarts = registraires.filter((command) => openCodeSays(command) !== "ask" || hookSays(command) !== "ask");
+  checks += 1;
+  if (ecarts.length) failures += 1;
+  console.log(`${ecarts.length ? "FAIL" : "OK  "} la table OpenCode demande un changement chez un registraire, comme le garde-fou${ecarts.length ? ` : ${ecarts.join(" | ")}` : ""}`);
+  const lectures = [
+    `curl -s "https://api.lws.net/v1/domain/example.fr"`,
+    `curl -s -X POST "https://api.porkbun.com/api/json/v3/ping" --data @-`,
+    `curl -s -G "https://api.namecheap.com/xml.response" --data-urlencode "Command=namecheap.domains.getList"`,
+    `node "C:/p/scripts/registrar-ovh.mjs" check`,
+  ];
+  const plus = lectures.filter((command) => openCodeSays(command) !== "ask" || hookSays(command) !== "allow");
+  checks += 1;
+  if (plus.length) failures += 1;
+  console.log(`${plus.length ? "FAIL" : "OK  "} chez OpenCode, une lecture chez un registraire demande aussi, ou le garde-fou la laisse passer${plus.length ? ` : ${plus.join(" | ")}` : ""}`);
 }
 
 console.log("\n── Robustesse (fail-open) ──");
@@ -1030,6 +1058,99 @@ expect("curl -s -K ./requete.cfg https://api.vercel.com/v9/projects/prj_1", "pas
   const ok = hosts.size > 0 && missing.length === 0;
   if (!ok) failures += 1;
   console.log(`${ok ? "OK  " : "FAIL"} la regle couvre les ${hosts.size} API de gestion appelees par les scripts${missing.length ? ` : manquent ${missing.join(", ")}` : ""}`);
+}
+
+console.log("\n── Un changement chez un registraire demande, comme une reecriture chez Cloudflare (revue externe, 3.4.10) ──");
+// Les serveurs de noms d'un domaine deplacent tout le domaine, son site et son courrier : ces
+// appels passaient sans question, parce que la verification ci-dessus ne lisait que scripts/ et
+// que les registraires sont appeles depuis les skills. Les formes exactes des skills LWS et
+// Hostinger, et une forme representative des quatre autres (la reproduction de l'auditeur).
+{
+  const LWS = `printf 'header = "X-Auth-Login: %s"\\nheader = "X-Auth-Pass: %s"\\n' "$LWS_LOGIN" "$LWS_KEY" | `;
+  expect(`${LWS}curl -s --config - -o "$LNS" -w "%{http_code}" -X PUT -H "Accept: application/json" -H "Content-Type: application/json" "https://api.lws.net/v1/domain/example.fr/dns" -d '{"ns1":"a.ns.cloudflare.com","ns2":"b.ns.cloudflare.com","ns3":"a.ns.cloudflare.com","ns4":"b.ns.cloudflare.com"}'`, "ask");
+  expect(`printf 'header = "Authorization: Bearer %s"\\n' "$TOK" | curl -s --config - -o "$HNS" -w "%{http_code}" -X PUT -H "Content-Type: application/json" "https://developers.hostinger.com/api/domains/v1/portfolio/example.fr/nameservers" -d '{"ns1":"a.ns.cloudflare.com","ns2":"b.ns.cloudflare.com"}'`, "ask");
+  expect(`printf 'header = "Authorization: Bearer %s"\\n' "$GANDI" | curl -s --config - -X PUT -H "Content-Type: application/json" "https://api.gandi.net/v5/domain/domains/example.fr/nameservers" -d '{"nameservers":["a.ns.cloudflare.com","b.ns.cloudflare.com"]}'`, "ask");
+  expect(`curl -s -X POST "https://api.porkbun.com/api/json/v3/domain/updateNs/example.fr" --data @-`, "ask");
+  expect(`curl -s -X POST "https://eu.api.ovh.com/1.0/domain/example.fr/nameServers/update" -H "Content-Type: application/json" --data @-`, "ask");
+  expect(`curl -s -G "https://api.namecheap.com/xml.response" --data-urlencode "Command=namecheap.domains.dns.setCustom" --data-urlencode "Nameservers=a.ns.cloudflare.com,b.ns.cloudflare.com"`, "ask");
+  // La methode que les options font : des donnees envoient un POST, sauf -G ; une methode que la
+  // ligne ne montre pas demande ; une configuration lue sur l'entree standard est lue.
+  expect(`curl -s "https://api.gandi.net/v5/livedns/domains/example.fr/records" -d '{"rrset_name":"www"}'`, "ask");
+  expect(`curl -s -X "$M" "https://api.gandi.net/v5/domain/domains/example.fr/nameservers"`, "ask");
+  expect(`printf 'request = "PUT"\\n' | curl -s --config - "https://api.lws.net/v1/domain/example.fr/dns"`, "ask");
+  expect(`curl -s -X POST "https://api.porkbun.com/api/json/v3/dns/delete/example.fr/123" --data @-`, "ask");
+  expect(`curl -s -X POST "https://api.porkbun.com/api/json/v3/$EP" --data @-`, "ask");
+  expect(`curl -s -G "https://api.namecheap.com/xml.response" --data-urlencode "Command=$CMD"`, "ask");
+  // Le script OVH du plugin signe ses appels dans son propre processus : set-nameservers deplace
+  // le domaine, check et nameservers lisent.
+  expect(`node "$PLUGIN_DIR/scripts/registrar-ovh.mjs" set-nameservers example.fr a.ns.cloudflare.com b.ns.cloudflare.com`, "ask");
+  expect(`node scripts/registrar-ovh.mjs "$VERB" example.fr`, "ask");
+  expect(`X="/p/scripts/registrar-ovh.mjs"\nnode "$X" set-nameservers example.fr a b`, "ask");
+  // Les lectures passent, telles que chaque registraire les dit : Porkbun lit par POST, Namecheap
+  // ecrit par GET.
+  expect(`printf 'header = "Authorization: Bearer %s"\\n' "$GANDI" | curl -s --config - "https://api.gandi.net/v5/organization/user-info"`, "pass");
+  expect(`${LWS}curl -s --config - -H "Accept: application/json" "https://api.lws.net/v1/domain/example.fr"`, "pass");
+  expect(`printf 'header = "Authorization: Bearer %s"\\n' "$TOK" | curl -s --config - "https://developers.hostinger.com/api/domains/v1/portfolio/example.fr"`, "pass");
+  expect(`curl -s -X POST "https://api.porkbun.com/api/json/v3/ping" --data @-`, "pass");
+  expect(`curl -s -X POST "https://api.porkbun.com/api/json/v3/domain/getNs/example.fr" --data @-`, "pass");
+  expect(`curl -s -G "https://api.namecheap.com/xml.response" --data-urlencode "Command=namecheap.domains.dns.getList"`, "pass");
+  expect(`curl -s https://eu.api.ovh.com/1.0/auth/time`, "pass");
+  expect(`curl -s -G "https://api.gandi.net/v5/domain/domains" -d "per_page=100"`, "pass");
+  expect(`node "$PLUGIN_DIR/scripts/registrar-ovh.mjs" check`, "pass");
+  expect(`node scripts/registrar-ovh.mjs nameservers example.fr`, "pass");
+  expect(`curl -s -X PUT "https://api.lws.net.example.com/x"`, "pass");
+}
+{
+  // Chaque hote que les skills appellent par curl est classe : gere (la regle 5b), registraire
+  // (5c), ou dans cette liste, avec ce qu'il fait. Un hote nouveau dans une skill casse cette
+  // verification au lieu de rester hors de la vue de la regle. Seule la commande curl est lue,
+  // jusqu'a la fin de la commande : un lien de prose sur la meme ligne n'en fait pas partie.
+  const { MANAGED_API_HOSTS, REGISTRAR_APIS } = await import(pathToFileURL(join(dirname(HOOK), "rules.mjs")).href);
+  const NOT_MANAGED = {
+    "api.anthropic.com": "/rotate-secret lit la liste des modeles avec une cle neuve, pour la verifier",
+    "api.openai.com": "/rotate-secret lit la liste des modeles avec une cle neuve, pour la verifier",
+    "api.indexnow.org": "previent les moteurs de recherche qu'une page a change : rien a perdre",
+    "api.ipify.org": "lit l'adresse publique de cet ordinateur (LWS la demande)",
+    "nominatim.openstreetmap.org": "change une adresse en coordonnees (/add-map) : une lecture",
+    "hypervibe.fr": "nomme dans l'en-tete User-Agent de /add-map, jamais appele",
+    "packages.stripe.dev": "telecharge la cle de signature de la ligne de commande Stripe (Linux)",
+    "raw.githubusercontent.com": "telecharge l'installeur de Homebrew (macOS)",
+    "searchconsole.googleapis.com": "inspection d'une adresse dans Search Console : une lecture par POST",
+  };
+  const known = new Set([...MANAGED_API_HOSTS, ...REGISTRAR_APIS.map((r) => r.host)]);
+  const BS = String.fromCharCode(92);
+  const hosts = new Map();
+  const visit = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) visit(full);
+      else if (/^SKILL.*\.md$/.test(name)) {
+        const text = readFileSync(full, "utf8").replace(/\r\n/g, "\n").split(`${BS}\n`).join(" ");
+        for (const line of text.split("\n")) {
+          for (const call of line.matchAll(/(?:^|[\s|;&(`$])curl\s+([^`]*?)(?=`|\s\|\s|;|\s&&\s|\s\|\|\s|$)/g)) {
+            for (const m of call[1].matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)) hosts.set(m[1].toLowerCase(), name === "SKILL.md" ? join(dir).split(/[\\/]/).pop() : name);
+          }
+        }
+      }
+    }
+  };
+  visit(join(dirname(HOOK), "..", "skills"));
+  const unclassified = [...hosts.keys()].filter((h) => !known.has(h) && !NOT_MANAGED[h]).sort();
+  const stale = Object.keys(NOT_MANAGED).filter((h) => !hosts.has(h));
+  checks += 1;
+  const ok = hosts.size > 0 && unclassified.length === 0;
+  if (!ok) failures += 1;
+  console.log(`${ok ? "OK  " : "FAIL"} les ${hosts.size} hotes que les skills appellent par curl sont tous classes${unclassified.length ? ` : non classes ${unclassified.map((h) => `${h} (${hosts.get(h)})`).join(", ")}` : ""}`);
+  checks += 1;
+  if (stale.length) failures += 1;
+  console.log(`${stale.length ? "FAIL" : "OK  "} la liste des hotes non geres ne garde que des hotes appeles${stale.length ? ` : plus appeles ${stale.join(", ")}` : ""}`);
+  checks += 1;
+  // Les cinq registraires que les skills appellent encore par curl (OVH passe par le script du
+  // plugin depuis la 3.4.11, IONOS et Infomaniak ne demandent plus de cle).
+  const attendus = ["api.lws.net", "developers.hostinger.com", "api.gandi.net", "api.porkbun.com", "api.namecheap.com"];
+  const absents = attendus.filter((h) => !hosts.has(h));
+  if (absents.length) failures += 1;
+  console.log(`${absents.length ? "FAIL" : "OK  "} la lecture des skills trouve les cinq registraires appeles par curl${absents.length ? ` : manquent ${absents.join(", ")}` : ""}`);
 }
 
 console.log("\n── Les deux gardes SQL lisent la meme chose, chaines comprises (revue externe, 3.2.5) ──");

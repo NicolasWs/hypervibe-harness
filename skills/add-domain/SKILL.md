@@ -91,8 +91,8 @@ Then Step 3.
 > - **Gandi** (FR, simple API with a Personal Access Token)
 > - **Porkbun** (US, free and clean API - a favorite among indie hackers)
 > - **LWS** (FR, direct API - an access key, and this computer's address to allow once, on the same LWS page)
-> - **Infomaniak** (Switzerland - manual for the NS, but a clean API to automate other things afterward)
-> - **IONOS** (ex-1&1, EU - manual for the NS, IONOS API available for DNS records)
+> - **Infomaniak** (Switzerland - manual for the NS change)
+> - **IONOS** (ex-1&1, EU - manual for the NS change)
 > - **Squarespace** (ex-Google Domains - manual only, the Google API was killed in 2024)
 > - **GoDaddy** (manual only - their API does not allow automation for this)
 > - **Other** (OnlyDomains, NameSilo, Name.com, etc. - guided manual)
@@ -105,7 +105,7 @@ Store the answer in `<registrar>`. Move to Step 4.
 
 Cloudflare is our **DNS provider** in every case (except when registrar=Cloudflare, where it is already covered by default).
 
-**Cloudflare architecture in hypervibe**: all DNS operations go through the Cloudflare REST API via `curl` + the `CLOUDFLARE_API_TOKEN` token. No `flarectl`, no MCP.
+**Cloudflare architecture in hypervibe**: all DNS operations go through the Cloudflare REST API via `curl` + the `CLOUDFLARE_API_TOKEN` token. No `flarectl`, no MCP. Every command block below starts by reading that token from the vault: each block runs in a fresh shell, where nothing set by an earlier one survives.
 
 ### 4.a - Preflight via `_check-deps cloudflare`
 
@@ -133,6 +133,8 @@ Once the user has run `/start`, re-invoke `_check-deps cloudflare` to confirm. O
 ### 5.a - Check whether the zone already exists
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CLOUDFLARE_API_TOKEN=$(node "$VAULT" get CLOUDFLARE api_token)
 ZONE_RESPONSE=$(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones?name=<domain>")
 ZONE_ID=$(echo "$ZONE_RESPONSE" | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(d.result?.[0]?.id || '');")
@@ -143,6 +145,8 @@ ZONE_ID=$(echo "$ZONE_RESPONSE" | node -e "const d = JSON.parse(require('fs').re
 Retrieve the `account_id` then POST the zone:
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CLOUDFLARE_API_TOKEN=$(node "$VAULT" get CLOUDFLARE api_token)
 ACCOUNT_ID=$(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/accounts" \
   | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(d.result?.[0]?.id || '');")
@@ -158,6 +162,8 @@ ZONE_ID=$(echo "$CREATE_RESPONSE" | node -e "const d = JSON.parse(require('fs').
 ### 5.c - Retrieve the assigned nameservers
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CLOUDFLARE_API_TOKEN=$(node "$VAULT" get CLOUDFLARE api_token)
 NS_INFO=$(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones/$ZONE_ID")
 NS1=$(echo "$NS_INFO" | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(d.result?.name_servers?.[0] || '');")
@@ -168,9 +174,43 @@ Store `ZONE_ID`, `NS1`, `NS2` for later.
 
 **Special case**: if `<registrar> == cloudflare` AND the zone is managed by Cloudflare natively (Cloudflare Registrar) -> no need to change the NS, **skip Step 6** and move to Step 7.
 
+### 5.d - Carry what the domain already carries (before the switch)
+
+The switch of Step 6 hands the **whole** domain to the Cloudflare zone, and a zone created through the API starts empty: whatever the current DNS holds and the zone does not stops answering at propagation, **the mail first** (a domain on Google Workspace, Microsoft 365, OVH's mail... would stop receiving). Survey it now, while the current nameservers still answer:
+
+```bash
+SURVEY="${CLAUDE_SKILL_DIR}/../../scripts/dns-survey.mjs"
+node "$SURVEY" <domain>
+```
+
+The script reads public DNS (the MX, every TXT of the domain itself, DMARC, the DKIM keys under the main providers' selectors, autodiscover, and common names such as `blog`, `shop`, `mail`), finds the domain's zone by its name, and says what the zone lacks. It reads the Cloudflare key from the vault itself.
+
+- **Exit 0**: the zone lacks nothing. If `receivesMail` is true, say it in one sentence ("your mail records are already in the new zone") and go to Step 6.
+- **Exit 2**: `missing` lists what would be lost. Say it plainly, by what it serves rather than record by record, e.g. *"Your domain receives its mail at Google Workspace (5 mail servers), and has a blog at blog.<domain>: I copy all of it into the new zone before switching, so nothing stops working."* Then:
+
+  ```bash
+  SURVEY="${CLAUDE_SKILL_DIR}/../../scripts/dns-survey.mjs"
+  node "$SURVEY" <domain> --copy
+  ```
+
+  - Exit 0: copied and read back in the zone. Go on.
+  - Exit 2: `failed` gives Cloudflare's own words for what it refused, and `missing` what is still lacking. **Do not switch**: tell the user what is missing and why, and fix it first (or have the user decide explicitly, see below).
+- **Exit 1**: a read failed (`unread`, or `error`): nothing can be concluded about what exists. **Never switch on a survey that did not answer**: run it again; if it keeps failing, say so and stop.
+- **Exit 3 / 4**: the vault is locked, or the Cloudflare key is missing: open the vault (`_ensure-vault`), or run `/start`.
+
+Then, before Step 6:
+
+- `dkimUnknown: true` (the domain receives or sends mail, and no DKIM key answered under the usual selectors): the mail provider may sign the domain's mail under a name of its own, which public DNS cannot list. Tell the user: their mail keeps arriving after the switch, but to keep its signature, they should look in their mail provider's settings for the DKIM record (a name ending in `._domainkey` and its value) and give it to you, so you add it to the zone. Not blocking.
+- `wildcard: true`: the domain answers any name (usually the registrar's parking page): it is not carried, and that is intended.
+- `notes` says what public DNS cannot show (SRV records, names outside the survey's list): ask the user, in one question, whether anything else lives under their domain (a blog, a shop, a subdomain of their own), and add it if so.
+
+**Never run Step 6 while `missing` is not empty**, unless the user explicitly says that what is listed can be lost (e.g. "I don't use that mail anymore"): repeat the list, and wait for that explicit answer.
+
 ---
 
 ## Step 6 - Change the nameservers at the registrar (sub-skill)
+
+**Only once Step 5.d says the zone lacks nothing**, or the user explicitly accepted to lose what it listed.
 
 Branch to the sub-skill matching the registrar:
 
@@ -210,6 +250,8 @@ Use the Cloudflare REST API via curl - `ZONE_ID` was stored in Step 5.
 ### 7.a - Delete the old A and CNAME records for `@` and `www` (if they exist)
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CLOUDFLARE_API_TOKEN=$(node "$VAULT" get CLOUDFLARE api_token)
 # List all the records in the zone
 RECORDS=$(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?per_page=100")
@@ -232,6 +274,8 @@ done
 ### 7.b - Add the Vercel records
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CLOUDFLARE_API_TOKEN=$(node "$VAULT" get CLOUDFLARE api_token)
 # A record: @ -> 76.76.21.21 (apex, proxy off)
 printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - -X POST \
   -H "Content-Type: application/json" \
@@ -250,6 +294,8 @@ printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s
 ### 7.c - Check that the records are in place
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CLOUDFLARE_API_TOKEN=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=<domain>"
 printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - \

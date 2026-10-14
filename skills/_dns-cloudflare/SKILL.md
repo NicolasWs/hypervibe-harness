@@ -53,6 +53,8 @@ cf_ok=$(echo "$result" | node -e "console.log(JSON.parse(require('fs').readFileS
 ## Step 2 - Verify that the zone exists
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones?name=<domain>" \
   | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); const z = d.result?.[0]; if (z) console.log('FOUND', z.id, z.status); else console.log('NOT_FOUND');"
@@ -67,6 +69,8 @@ printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - \
 First get the user's `account_id`:
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 ACCOUNT_ID=$(printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/accounts" \
   | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(d.result?.[0]?.id || '');")
@@ -75,6 +79,8 @@ ACCOUNT_ID=$(printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s -
 Then create the zone:
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X POST \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"<domain>\",\"account\":{\"id\":\"$ACCOUNT_ID\"},\"type\":\"full\"}" \

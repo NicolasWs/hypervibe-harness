@@ -71,19 +71,27 @@ export const authRouter = createTRPCRouter({
         const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/reset-password?token=${rawToken}`;
         const safeUrl = escapeForBrevo(resetUrl);
 
-        await sendMail({
-          to: [{ email: user.email, name: user.name ?? undefined }],
-          subject: "Réinitialisation de ton mot de passe",
-          htmlContent: `<p>Pour choisir un nouveau mot de passe, clique sur ce lien :</p><p><a href="${safeUrl}">${safeUrl}</a></p><p>Le lien expire dans 1 heure et ne peut être utilisé qu'une fois. Si tu n'as pas demandé cette réinitialisation, ignore cet email.</p>`,
-          textContent: `Pour choisir un nouveau mot de passe, ouvre ce lien : ${resetUrl}\n\nLe lien expire dans 1 heure et ne peut être utilisé qu'une fois. Si tu n'as pas demandé cette réinitialisation, ignore cet email.`.replace(
-            /\{\{/g,
-            "{ {",
-          ),
-        });
+        try {
+          await sendMail({
+            to: [{ email: user.email, name: user.name ?? undefined }],
+            subject: "Réinitialisation de ton mot de passe",
+            htmlContent: `<p>Pour choisir un nouveau mot de passe, clique sur ce lien :</p><p><a href="${safeUrl}">${safeUrl}</a></p><p>Le lien expire dans 1 heure et ne peut être utilisé qu'une fois. Si tu n'as pas demandé cette réinitialisation, ignore cet email.</p>`,
+            textContent: `Pour choisir un nouveau mot de passe, ouvre ce lien : ${resetUrl}\n\nLe lien expire dans 1 heure et ne peut être utilisé qu'une fois. Si tu n'as pas demandé cette réinitialisation, ignore cet email.`.replace(
+              /\{\{/g,
+              "{ {",
+            ),
+          });
+        } catch (e) {
+          // Never told to the caller: an error here would say the account exists.
+          // Logged on the server, for whoever runs the project (Hypervibe 3.4.11).
+          console.error("[auth] password reset email not sent:", e instanceof Error ? e.message : String(e));
+        }
       } else {
-        // No account for this email. Do equivalent CPU work (a throwaway hash)
-        // so the response time does not reveal whether the account exists.
+        // No account for this email. Do equivalent CPU work (a throwaway hash),
+        // then wait about as long as a send takes, so the response time does not
+        // reveal whether the account exists.
         await hashPassword(randomBytes(32).toString("base64url"));
+        await new Promise((resolve) => setTimeout(resolve, 250 + Math.floor(Math.random() * 400)));
       }
 
       return { success: true };

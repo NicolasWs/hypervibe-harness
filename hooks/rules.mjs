@@ -1281,6 +1281,35 @@ export const MANAGED_API_HOSTS = [
 // branch): elsewhere the plugin's skills PUT to create (a site in Search Console, a sender).
 const OVERWRITING_API_HOSTS = ["console.neon.tech", "api.vercel.com", "api.cloudflare.com"];
 
+/** The registrars the plugin's skills operate (the sub-skills /add-domain hands a domain's
+ *  nameservers to), and how each one says a change. A change there moves a whole domain, its
+ *  site and its mail: its nameservers, or the records the registrar keeps for it. Most of them
+ *  say it with the method (anything but a read); Porkbun answers every call, reads included, to
+ *  a POST and names the change in its address; Namecheap takes even a change as a GET, the
+ *  operation in its `Command`. These calls went unasked until 3.4.11: the check that keeps the
+ *  hosts above complete read the plugin's scripts, and the registrars are called from its
+ *  skills (outside review, 3.4.10). */
+export const REGISTRAR_APIS = [
+  { host: "api.lws.net" },
+  { host: "developers.hostinger.com" },
+  { host: "api.gandi.net" },
+  { host: "eu.api.ovh.com" },
+  { host: "ca.api.ovh.com" },
+  { host: "api.us.ovhcloud.com" },
+  { host: "api.hosting.ionos.com" },
+  { host: "api.infomaniak.com" },
+  { host: "api.porkbun.com", change: /api\.porkbun\.com\/api\/json\/v3\/(?:domain\/(?:update|create|add|delete)|dns\/(?:create|edit|delete)|[^\s"']*\$)/i },
+  { host: "api.namecheap.com", change: /\bCommand=(?:["']?\$|["']?namecheap\.[a-z.]*\.(?:set|create|update|delete|renew|reactivate|transfer))/i },
+];
+
+// curl's long options that take a value, read so that the value is never taken for an option.
+const CURL_LONG_VALUED = new Set([
+  "request", "config", "data", "data-raw", "data-binary", "data-ascii", "data-urlencode", "json", "form", "form-string",
+  "upload-file", "header", "user-agent", "referer", "output", "write-out", "user", "cookie", "cookie-jar", "url",
+  "max-time", "connect-timeout", "retry", "retry-delay", "retry-max-time", "cacert", "cert", "key", "proxy", "resolve",
+  "connect-to", "oauth2-bearer", "variable", "output-dir", "dump-header", "trace", "trace-ascii", "limit-rate", "range",
+]);
+
 // curl's short options that take a value, attached (`-XDELETE`) or in the next word.
 const CURL_VALUED = "AbcCdDEeFHKmoPQrTtuUwXxyYz";
 
@@ -1372,6 +1401,61 @@ function destructiveApiCall(seg, parts = [], k = -1) {
   if (!method) return false;
   const hosts = method === "DELETE" ? MANAGED_API_HOSTS : OVERWRITING_API_HOSTS;
   return hosts.some((host) => new RegExp(`https?://${host.replace(/\./g, "\\.")}(?=[/:?"'\\s]|$)`, "i").test(text));
+}
+
+/** A raw curl that changes a domain at its registrar (REGISTRAR_APIS). Its options are read as
+ *  curl reads them, like destructiveApiCall: the method it is given (`-X`, `--request`, a config
+ *  on its standard input), or the one its options make (data sends a POST, unless `-G` makes it
+ *  a query; `-T` uploads, a PUT). A method the command line does not show (`-X "$M"`) is taken
+ *  for a change: this guard cannot read it, and the domain is too much to lose on a guess. */
+function registrarChange(seg, parts = [], k = -1) {
+  if (!/^curl\s/.test(seg)) return false;
+  const list = operandsOf(words(seg).slice(1));
+  const methods = [];
+  let configFromInput = false;
+  let data = false;
+  let get = false;
+  let upload = false;
+  for (let w = 0; w < list.length; w += 1) {
+    const v = list[w].value;
+    const long = /^--([a-z0-9-]+)(?:=([\s\S]*))?$/.exec(v);
+    if (long) {
+      const name = long[1];
+      const value = CURL_LONG_VALUED.has(name) ? (long[2] ?? list[++w]?.value ?? "") : null;
+      if (name === "request") methods.push(value);
+      else if (name === "config" && FROM_STDIN.test(value)) configFromInput = true;
+      else if (/^(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|form(?:-string)?)$/.test(name)) data = true;
+      else if (name === "upload-file") upload = true;
+      else if (name === "get") get = true;
+      continue;
+    }
+    if (!/^-[^-]/.test(v)) continue;
+    for (let c = 1; c < v.length; c += 1) {
+      if (v[c] === "G") {
+        get = true;
+        continue;
+      }
+      if (!CURL_VALUED.includes(v[c])) continue;
+      const value = c + 1 < v.length ? v.slice(c + 1) : (list[++w]?.value ?? "");
+      if (v[c] === "X") methods.push(value);
+      else if (v[c] === "K" && FROM_STDIN.test(value)) configFromInput = true;
+      else if (v[c] === "d" || v[c] === "F") data = true;
+      else if (v[c] === "T") upload = true;
+      break;
+    }
+  }
+  let text = seg;
+  const config = configFromInput ? fedInput(parts, k) : null;
+  if (config !== null) {
+    text += `\n${config}`;
+    methods.push(...configMethods(config));
+    if (/^\s*-?-?(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|form(?:-string)?)\b/m.test(config)) data = true;
+  }
+  const registrar = REGISTRAR_APIS.find(({ host }) => new RegExp(`https?://${host.replace(/\./g, "\\.")}(?=[/:?"'\\s]|$)`, "i").test(text));
+  if (!registrar) return false;
+  if (registrar.change) return registrar.change.test(text);
+  if (methods.length) return methods.some((m) => !/^(?:GET|HEAD)$/i.test(m));
+  return upload || (data && !get);
 }
 
 /** The SQL a run-sql.mjs call is about to run, read as the script reads its arguments: the
@@ -1962,6 +2046,18 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
       continue;
     }
 
+    // 5c. A change at a domain's registrar: its nameservers, or the records the registrar keeps
+    //     for it. The whole domain moves with it, its site and its mail, and a rewrite at
+    //     Cloudflare already asked (5b) while this, heavier, passed (outside review, 3.4.10).
+    //     Reads pass, as each registrar says them (REGISTRAR_APIS).
+    if (registrarChange(seg, parts, index)) {
+      keep(
+        ASK,
+        "This call changes a domain at its registrar (its nameservers, or the records the registrar keeps for it): the whole domain moves with it, its site and its mail. Say which domain and what changes, and confirm with the user.",
+      );
+      continue;
+    }
+
     // 6. Destructive SQL. The hook only sees the command line, so run-sql.mjs
     //    carries the same check for SQL passed by file or heredoc.
     //    Only when a runtime LAUNCHES the script: `grep "DROP" run-sql.mjs` is
@@ -2123,6 +2219,20 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
         "This redeploys the shared clock (its registry, and its code when it is behind the plugin), code that runs with the account's keys. Confirm with the user before the run.",
       );
       continue;
+    }
+
+    // 9 ter. The plugin's own OVH script (3.4.11), which signs its calls in its own process:
+    //    set-nameservers moves a domain, like a raw call of rule 5c; check and nameservers only
+    //    read. A verb the command line does not show asks.
+    if (launchedBase === "registrar-ovh.mjs") {
+      const verb = operandsOf(words(seg.slice(launched[0].length)))[0];
+      if (!verb || /[$`]/.test(verb.raw) || !/^(?:check|nameservers)$/.test(verb.value)) {
+        keep(
+          ASK,
+          "This changes a domain's nameservers at OVH: the whole domain moves with it, its site and its mail. Say which domain and which nameservers, and confirm with the user.",
+        );
+        continue;
+      }
     }
   }
 

@@ -309,6 +309,8 @@ cf_ok=$(echo "$result" | node -e "console.log(JSON.parse(require('fs').readFileS
 If `cf_ok = true`, check that the domain is in a CF zone:
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CLOUDFLARE_API_TOKEN=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones?name=<domain>" \
   | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(d.result?.[0]?.id ? 'EXISTS' : 'NOT_FOUND');"

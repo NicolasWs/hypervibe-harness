@@ -48,6 +48,8 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { render } from "./_render.mjs";
+import { envValue } from "./env-value.mjs";
+import { senderPlan } from "./email-sender.mjs";
 import { readUserEnv } from "./_read-user-env.mjs";
 import { getSecret } from "./vault/vault.mjs";
 
@@ -85,15 +87,29 @@ if (!name) fail("--name <project-name> is required");
 if (!/^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$/.test(name)) {
   fail(`--name must be kebab-case (lowercase a-z, 0-9, -), 2-50 chars. Got: ${name}`);
 }
-if (provider === "brevo") {
-  if (!brevoSender) fail("--brevo-sender <email> is required when --provider brevo");
+const WEB_DIR = resolve(process.cwd(), webDir);
+
+// The sender the project already has (set by an earlier setup, by the domain's own sub-skill, or
+// by the organisation's administrator) is kept: a sender is pushed only where none is set
+// (Hypervibe 3.4.11: a verified sender was replaced by Resend's test address, which only
+// delivers to the account's owner, and Brevo's by the one typed here).
+const senderInPlace = {
+  RESEND_FROM_EMAIL: envValue(WEB_DIR, "RESEND_FROM_EMAIL"),
+  BREVO_SENDER_EMAIL: envValue(WEB_DIR, "BREVO_SENDER_EMAIL"),
+  BREVO_SENDER_NAME: envValue(WEB_DIR, "BREVO_SENDER_NAME"),
+};
+if (provider === "brevo" && !senderInPlace.BREVO_SENDER_EMAIL) {
+  if (!brevoSender) fail("--brevo-sender <email> is required when --provider brevo and the project has no BREVO_SENDER_EMAIL yet");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(brevoSender)) {
     fail(`--brevo-sender must be a valid email. Got: ${brevoSender}`);
   }
-  if (!brevoSenderName) brevoSenderName = name;
 }
+if (provider === "brevo" && !brevoSenderName) brevoSenderName = name;
 
-const WEB_DIR = resolve(process.cwd(), webDir);
+/** The sender variables to push: those the project lacks. The others are kept, and said. */
+function senderPairs() {
+  return senderPlan({ provider, inPlace: senderInPlace, brevoSender, brevoSenderName });
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────
 const STEPS = [
@@ -371,19 +387,11 @@ async function pushEnvVars() {
   const helper = join(__dirname, "push-env-vars.mjs");
   if (!existsSync(helper)) fail(`Sibling script missing: ${helper}`);
 
-  const kvs = [];
-  if (provider === "resend") {
-    kvs.push(`RESEND_API_KEY=${state.apiKey}`);
-    // onboarding@resend.dev is Resend's official test sender - works immediately
-    // but only sends to the account owner. SKILL Step 8 lets the user upgrade later.
-    kvs.push(`RESEND_FROM_EMAIL=onboarding@resend.dev`);
-    state.envVarsPushed = ["RESEND_API_KEY", "RESEND_FROM_EMAIL"];
-  } else {
-    kvs.push(`BREVO_API_KEY=${state.apiKey}`);
-    kvs.push(`BREVO_SENDER_EMAIL=${brevoSender}`);
-    kvs.push(`BREVO_SENDER_NAME=${brevoSenderName}`);
-    state.envVarsPushed = ["BREVO_API_KEY", "BREVO_SENDER_EMAIL", "BREVO_SENDER_NAME"];
-  }
+  const { kept, pushed } = senderPairs();
+  const kvs = [`${provider === "resend" ? "RESEND_API_KEY" : "BREVO_API_KEY"}=${state.apiKey}`, ...pushed];
+  state.envVarsPushed = kvs.map((kv) => kv.slice(0, kv.indexOf("=")));
+  state.senderKept = kept;
+  if (kept.length) ok(`Sender already set for the project, kept: ${kept.join(", ")}`);
 
   // On the helper's standard input, never as arguments: an argument can be read in the process
   // list by anything running on the machine (3.3.4). The helper writes .env first, so a push that

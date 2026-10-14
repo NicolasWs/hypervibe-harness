@@ -80,7 +80,8 @@ prose. A `PreToolUse` hook, on `Bash` and on `Monitor` (the other tool that
 runs shell commands), refuses a sweeping `git add -A` and destructive SQL, and
 asks for your confirmation before a push, a direct production deploy, a worker
 deploy (also when one of the plugin's own scripts would do it), a schema push,
-cloud deletions, a hard reset, or the opt-in that lets a checkout's versioned
+cloud deletions, a change of a domain at its registrar (its nameservers, or the
+records the registrar keeps), a hard reset, or the opt-in that lets a checkout's versioned
 git hooks run. It asks the same on the forge's command line: before a merge
 into the main branch or a deployment run again (both publish), and before what
 deletes, exposes or moves something there (a repository deleted, renamed, created

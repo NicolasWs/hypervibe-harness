@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.4.11 (14 octobre 2026)
+
+### Améliorations
+- **Ton courrier ne se perd plus quand tu branches ton domaine** : avant de confier ton domaine à Cloudflare, `/add-domain` relève ce qu'il porte déjà (les serveurs de ta messagerie, ton SPF, ton DMARC, les clés DKIM des grands fournisseurs, un blog ou une boutique sur un sous-domaine), le recopie dans la nouvelle zone et le relit. Un domaine sur Google Workspace ou chez la messagerie d'OVH cessait sinon de recevoir son courrier quelques minutes après la bascule. Si quelque chose n'a pas pu être relu ou recopié, la bascule attend.
+- **Une adresse de redirection ne prend plus le courrier de vraies boîtes** : `/new-email-address` refuse d'activer la redirection de Cloudflare sur un domaine dont le courrier arrive déjà chez un fournisseur de messagerie, et te propose de créer l'adresse chez lui. Il vérifie aussi que la redirection est bien active avant de te l'annoncer.
+- **Le garde-fou te demande avant de changer un domaine chez son registraire** : changer les serveurs de noms chez LWS, Hostinger, Gandi, OVH, Porkbun ou Namecheap déplace tout le domaine, et passait sans question alors qu'une simple réécriture chez Cloudflare demandait déjà (relecture de Bastien Detraz). Les lectures passent toujours.
+- **OVH sans clé sur la ligne de commande** : les appels à OVH sont signés à l'intérieur du plugin, avec tes trois clés lues dans ton coffre-fort. Une clé ne passe plus jamais en argument d'une commande, et le pointage ne dépend plus d'un outil absent des Mac.
+- **Tes clés ne passent jamais par la conversation** : chez Namecheap, Porkbun et OVH, Claude disait encore « donne-les-moi » juste avant d'ouvrir la fenêtre faite pour ça. Il annonce maintenant la fenêtre, où tu les colles directement. IONOS et Infomaniak ne te font plus créer de clé « pour plus tard » qu'aucune commande n'utilisait.
+- **L'expéditeur de tes emails n'est plus écrasé** : relancer `/add-email` ne remplace plus une adresse d'expédition vérifiée par l'adresse de test de Resend, qui n'écrit qu'au titulaire du compte.
+- **Un mot de passe oublié ne trahit plus qu'un compte existe** : sur les sites qui le proposent, la réponse est la même, que l'adresse ait un compte ou non, même quand l'envoi de l'email échoue.
+
+### Coulisses
+- Les commandes de domaine et d'email lisent la clé Cloudflare dans le coffre à chaque étape, au lieu de supposer qu'une étape précédente l'avait chargée.
+- Chaque point a sa recette, éprouvée en abîmant le code décision par décision.
+
 ## v3.4.10 (12 octobre 2026)
 
 ### Nouveautés

@@ -70,6 +70,8 @@ Extract and store these records.
 
 ### 3.a - Zone ID
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 ZONE_ID=$(printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones?name=<domain>" \
   | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(d.result?.[0]?.id || '');")
@@ -80,12 +82,16 @@ Empty → error (the zone must exist, `/add-domain` created it). Abort.
 
 **TXT** (SPF, DKIM):
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X POST -H "Content-Type: application/json" \
   -d "{\"type\":\"TXT\",\"name\":\"<name>\",\"content\":\"<value>\",\"ttl\":3600,\"proxied\":false}" \
   "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records"
 ```
 **MX** (bounce):
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X POST -H "Content-Type: application/json" \
   -d "{\"type\":\"MX\",\"name\":\"<name>\",\"content\":\"<value>\",\"priority\":<priority>,\"ttl\":3600,\"proxied\":false}" \
   "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records"

@@ -59,6 +59,8 @@ Wait for the answer.
 ## Step 3 - Check the Cloudflare zone
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 ZONE_RESPONSE=$(printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones?name=<domain>")
 ZONE_ID=$(echo "$ZONE_RESPONSE" | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(d.result?.[0]?.id || '');")
@@ -75,14 +77,17 @@ Abort.
 
 ## Step 4 - Make sure Email Routing is enabled
 
-Enabling is idempotent on Cloudflare's side: calling the endpoint even if it is already active does not break anything, but returns a different status. We capture it and move on.
+Email Routing takes the domain's mail servers (MX) for itself: it cannot share them with a mail provider (Cloudflare's documentation says so). On a domain that already receives its mail elsewhere (Google Workspace, Microsoft 365, OVH's mail...), enabling it would cut those mailboxes off. The plugin's script checks the zone's mail servers first, enables only when none belongs to another provider, and reads Cloudflare's settings back:
 
 ```bash
-printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X POST \
-  "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/email/routing/enable" > /dev/null
+ROUTING="${CLAUDE_SKILL_DIR}/../../scripts/email-routing.mjs"
+node "$ROUTING" enable <domain>
 ```
 
-If this is the first activation, Cloudflare automatically adds the MX + SPF records. Nothing to do on the DNS side.
+- **Exit 0** (`enabled: true`): Email Routing is on (`already: true` if it was). On a first activation Cloudflare adds its own MX and SPF records. Go on.
+- **Exit 2** (`foreignMx`): the domain receives its mail at another provider. **Stop here**: tell the user, in plain words, that their mailboxes there would stop receiving, and that the address is better created with that provider (most of them offer aliases). Replacing those mailboxes with forwarding is a change of mail provider, not this skill's to make.
+- **Exit 1**: Cloudflare refused, or the settings do not read back as enabled (`error`, in Cloudflare's own words): say it, and stop. Never announce an activation that did not read back.
+- **Exit 3 / 4**: open the vault (`_ensure-vault`), or run `/start`.
 
 ---
 
@@ -107,6 +112,8 @@ Use the argument directly as `<dest>` and move on to Step 7.
 ### 6.b - Otherwise: list the already verified destinations
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 DESTS=$(printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/email/routing/addresses")
 VERIFIED_LIST=$(echo "$DESTS" | node -e "
@@ -145,6 +152,8 @@ Re-check in `$DESTS` whether `<dest>` is present AND `verified` is not null.
 **Otherwise (new destination or unverified destination)**:
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X POST \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"<dest>\"}" \
@@ -164,6 +173,8 @@ Then:
 ### Literal rule (exact prefix)
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X POST \
   -H "Content-Type: application/json" \
   -d "{\"enabled\":true,\"name\":\"Route <prefix> to <dest>\",\"matchers\":[{\"type\":\"literal\",\"field\":\"to\",\"value\":\"<prefix>@<domain>\"}],\"actions\":[{\"type\":\"forward\",\"value\":[\"<dest>\"]}]}" \
@@ -173,6 +184,8 @@ printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X 
 ### Catch-all rule (if the user asked for `*`)
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X POST \
   -H "Content-Type: application/json" \
   -d "{\"enabled\":true,\"name\":\"Catch-all to <dest>\",\"matchers\":[{\"type\":\"all\"}],\"actions\":[{\"type\":\"forward\",\"value\":[\"<dest>\"]}]}" \

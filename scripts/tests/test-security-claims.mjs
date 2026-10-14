@@ -839,7 +839,9 @@ catch (e) { console.log(JSON.stringify({ code: e.code, message: e.message })); }
 // printf 'header = "Authorization: Bearer %s"\n' "$TOK" | curl --config - ...
 console.log("\n── Aucune cle en argument de curl, de wget ou du CLI Vercel, nulle part (3.3.7) ──");
 {
-  const CLE = /auth|key|token|secret|pass|cookie/i;
+  // `consumer` : la cle de consommateur d'OVH partait dans un en-tete X-Ovh-Consumer, qu'aucun
+  // des autres mots ne nommait (revue de la 3.4.10).
+  const CLE = /auth|key|token|secret|pass|cookie|consumer/i;
   const REMPLACE = /\$(?:\{|\(|[A-Za-z_])/;
   // Les mots d'une commande, guillemets compris.
   const mots = (ligne) => [...ligne.matchAll(/(?:"(?:[^"\\]|\\.)*"|'[^']*'|\\.|[^\s"'\\])+/g)].map((m) => m[0]);
@@ -946,6 +948,33 @@ console.log("\n── Aucune cle en argument de curl, de wget ou du CLI Vercel, 
   parcourir(ROOT);
   check("aucune commande du harnais (skills, scripts, gabarits) ne met une cle en argument de curl, de wget ou du CLI Vercel", fautes.length === 0, fautes.join(" | "));
 }
+
+{
+  // Les sous-skills de registraire ne font jamais coller une cle dans la conversation : la fenetre
+  // masquee la recoit (revue de la 3.4.10 : quatre sous-skills disaient « donnez-les-moi » juste
+  // avant d'affirmer que rien ne passait par la conversation). Une capture d'ecran demandee n'est
+  // pas une cle.
+  const DEMANDE = /\b(?:give (?:me|them to me|it to me)|send (?:me|them to me|it to me)|paste (?:it|them) here|donne-(?:moi|les|le|la)\b|colle-(?:le|les|la) ici|envoie-(?:moi|les|le|la)\b)/i;
+  const demande = (ligne) => DEMANDE.test(ligne) && !/capture|screenshot|\bnever\b|\bjamais\b/i.test(ligne);
+  const fautes = [];
+  const dossier = join(ROOT, "skills");
+  for (const nom of readdirSync(dossier).filter((n) => n.startsWith("_dns-"))) {
+    readFileSync(join(dossier, nom, "SKILL.md"), "utf8")
+      .split("\n")
+      .forEach((ligne, i) => {
+        if (demande(ligne)) fautes.push(`${nom}:${i + 1}`);
+      });
+  }
+  check("aucune sous-skill de registraire ne fait coller une cle dans la conversation", fautes.length === 0, fautes.join(", "));
+  const temoins = ["> Then give me:", "> Give me the 2 values (API Key + Secret).", "> 7. Give them to me.", "> Donne-moi ensuite :", "> 9. Colle-le ici, je l'enregistre proprement.", "> 7. Donne-les moi."];
+  check("... ce controle reconnait les formules de la 3.4.10", temoins.every(demande));
+  check("... et laisse passer une capture d'ecran demandee", !demande("> Dis-moi quand c'est fait (et envoie-moi une capture si un ecran ne ressemble pas)"));
+}
+
+check(
+  "SECURITY.md dit que le garde-fou demande avant un changement chez un registraire, et la regle existe (3.4.11)",
+  /a change of a domain at its registrar/.test(securite.replace(/\s+/g, " ")) && /export const REGISTRAR_APIS/.test(lire("hooks/rules.mjs")) && /registrarChange\(seg, parts, index\)/.test(lire("hooks/rules.mjs")),
+);
 
 console.log(`\n${checks - failures}/${checks} verifications`);
 if (failures) {

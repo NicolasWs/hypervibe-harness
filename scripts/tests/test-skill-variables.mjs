@@ -60,12 +60,38 @@ for (const file of skillFiles(join(ROOT, "skills"))) {
 console.log("── Ce qu'une skill ne doit jamais laisser deviner ──");
 check(`${files} skills lues : chacune pose ce dont ses commandes se servent`, files > 0 && holes.length === 0, holes.join(", "));
 
+/** Names a command block must set ITSELF before using them: each block runs in a fresh shell, so a
+ *  value read in an earlier block is gone. /add-domain sent the Cloudflare key in ten calls without
+ *  any block ever reading it: every call left with an empty key (revue de la 3.4.10). */
+// Under both names the skills give the Cloudflare key (CFTOK in the sub-skills and /new-email-address).
+const PER_BLOCK = ["CLOUDFLARE_API_TOKEN", "CFTOK"];
+function unsetInBlock(text) {
+  const blocks = [...text.replace(/\r\n/g, "\n").matchAll(BLOCK)].map((m) => m[2]);
+  const missing = new Set();
+  for (const b of blocks) {
+    for (const name of PER_BLOCK) {
+      const used = new RegExp(`\\$\\{?${name}\\b`).test(b);
+      const set = new RegExp(`(?:^|[\\s;&|(])(?:export\\s+)?${name}=`, "m").test(b);
+      if (used && !set) missing.add(name);
+    }
+  }
+  return [...missing];
+}
+const perBlock = [];
+for (const file of skillFiles(join(ROOT, "skills"))) {
+  for (const name of unsetInBlock(readFileSync(file, "utf8"))) perBlock.push(`${relative(ROOT, file)} : ${name}`);
+}
+check("chaque bloc qui envoie la clé Cloudflare l'a lue lui-même", perBlock.length === 0, perBlock.join(", "));
+
 console.log("\n── Témoins ──");
 const fence = "```";
 check("une commande qui se sert de $ORG sans le poser est vue", unset(`${fence}bash\ngh pr merge 3 --repo "$ORG/site"\n${fence}\n`).includes("ORG"));
 check("posée dans la même skill, elle passe", unset(`${fence}bash\nORG=$(node "$VAULT" get GITHUB org_name)\nVAULT=x\ngh pr merge 3 --repo "$ORG/site"\n${fence}\n`).length === 0);
 check("une valeur seulement nommée en prose ne compte pas comme posée", unset(`avec l'org \`GH_ORG\` :\n${fence}bash\nB="repos/\${GH_ORG}/site"\n${fence}\n`).includes("GH_ORG"));
 check("écrite en entier en code en ligne, elle compte", unset(`> - \`VAULT="\${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"\`\n${fence}bash\nnode "$VAULT" status\n${fence}\n`).length === 0);
+
+check("un bloc qui envoie la clé Cloudflare sans l'avoir lue est vu, même si un autre bloc la lit", unsetInBlock(`${fence}bash\nT=$(node "$VAULT" get CLOUDFLARE api_token)\nCLOUDFLARE_API_TOKEN="$T"\n${fence}\n${fence}bash\nprintf 'header = "Authorization: Bearer %s"\\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - https://api.cloudflare.com/client/v4/zones\n${fence}\n`).includes("CLOUDFLARE_API_TOKEN"));
+check("lue dans le même bloc, elle passe", unsetInBlock(`${fence}bash\nCLOUDFLARE_API_TOKEN=$(node "$VAULT" get CLOUDFLARE api_token)\nprintf 'header = "Authorization: Bearer %s"\\n' "$CLOUDFLARE_API_TOKEN" | curl -s --config - https://api.cloudflare.com/client/v4/zones\n${fence}\n`).length === 0);
 
 console.log(`\n${checks - failures}/${checks} checks`);
 if (failures) process.exit(1);

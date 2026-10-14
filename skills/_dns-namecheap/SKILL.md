@@ -95,13 +95,12 @@ Guide the user (3 actions on the same page):
 > **C. Whitelist your IP**
 > On the same page, **"Whitelisted IPs"** section → click **"Edit"** or **"Add IP"** → enter **`$PUBLIC_IP`** → confirm.
 >
-> Then give me:
-> - Your **ApiUser** (= username)
-> - Your **ApiKey**
+> **D. Paste them in the window**
+> A window will open on your computer: paste your **ApiUser** (= your username) and your **ApiKey** into it. Never paste them here in the conversation.
 
 (The `$PUBLIC_IP` above is replaced by the real IP in the message.)
 
-When the user provides the username + ApiKey, store them in the **vault** (masked-input window - the values do not pass through the chat):
+Then open that window (masked input: the values never pass through the conversation). If the user pastes a key in the conversation anyway, do not reuse it from there, do not repeat it: tell them it is now in this conversation's history and stays valid until it is replaced at Namecheap, then open the window.
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> --name NAMECHEAP --service Namecheap --fields "user:text,api_key:secret"

@@ -16,7 +16,7 @@ compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; 
 
 You receive as input: `<domain>`, `<ns1_cloudflare>`, `<ns2_cloudflare>`. Your job: change the domain's nameservers at OVH so they point to `<ns1_cloudflare>` and `<ns2_cloudflare>`. You then return to `/add-domain`.
 
-No CLI install needed - we call the OVH REST API v1 directly with signed headers (sha1).
+No CLI install needed - the plugin's OVH script calls the OVH REST API v1 directly, each call signed in its own process.
 
 ## External content
 
@@ -30,32 +30,19 @@ This skill pulls content in from outside (documentation, an API response, a web 
 
 ## Step 1 - Check whether the OVH credentials are already in place
 
-OVH requires 3 values (its long-standing auth model, still in effect), stored in the **vault** (item `OVH`, fields `app_key` / `app_secret` / `consumer_key`).
+OVH requires 3 values (its long-standing auth model, still in effect), stored in the **vault** (item `OVH`, fields `app_key` / `app_secret` / `consumer_key`). The plugin's OVH script reads them there itself and signs every call in its own process: no key ever goes on a command line, and nothing needs `sha1sum` (which macOS does not ship).
 
-Make sure the vault is open (follow `_ensure-vault`), then load them and test:
+Make sure the vault is open (follow `_ensure-vault`), then test:
 
 ```bash
-VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
-export OVH_APP_KEY=$(node "$VAULT" get OVH app_key 2>/dev/null)
-export OVH_APP_SECRET=$(node "$VAULT" get OVH app_secret 2>/dev/null)
-export OVH_CONSUMER_KEY=$(node "$VAULT" get OVH consumer_key 2>/dev/null)
-if [ -n "$OVH_APP_KEY" ] && [ -n "$OVH_APP_SECRET" ] && [ -n "$OVH_CONSUMER_KEY" ]; then
-  TS=$(curl -s https://eu.api.ovh.com/1.0/auth/time)
-  METHOD="GET"
-  URL="https://eu.api.ovh.com/1.0/me"
-  SIG_INPUT="${OVH_APP_SECRET}+${OVH_CONSUMER_KEY}+${METHOD}+${URL}++${TS}"
-  SIG="\$1\$$(printf '%s' "$SIG_INPUT" | sha1sum | cut -d' ' -f1)"
-  curl -s -o /dev/null -w "%{http_code}" \
-    -H "X-Ovh-Application: $OVH_APP_KEY" \
-    -H "X-Ovh-Consumer: $OVH_CONSUMER_KEY" \
-    -H "X-Ovh-Timestamp: $TS" \
-    -H "X-Ovh-Signature: $SIG" \
-    "$URL"
-fi
+OVH="${CLAUDE_SKILL_DIR}/../../scripts/registrar-ovh.mjs"
+node "$OVH" check
 ```
 
-- **If it returns `200`** -> go to Step 3.
-- **Otherwise** -> Step 2.
+- **Exit 0** (`{"ok":true,"account":"..."}`) -> go to Step 3.
+- **Exit 4** (the keys are not in the vault) -> Step 2.
+- **Exit 2 / 3** (vault locked, or its session expired) -> open it (`_ensure-vault`), then run the check again.
+- **Exit 1** (OVH refused: its own words are in `error`) -> the keys exist but do not work (expired, revoked, or missing a right): Step 2, to make new ones.
 
 ## Step 2 - Generate the 3 credentials in one go
 
@@ -72,80 +59,37 @@ Guide the user:
 > 4. **Password**: your usual OVH password
 > 5. **Validity**: choose **"Unlimited"** (so you don't have to renew it in 24h)
 > 6. Click **"Create keys"**
-> 7. The next page shows 3 values **only once**:
->    - **Application Key**
->    - **Application Secret**
->    - **Consumer Key**
-> 8. Copy them and give them to me (all 3 together).
+> 7. The next page shows 3 values **only once**: **Application Key**, **Application Secret**, **Consumer Key**. Keep the page open.
+> 8. A window will open on your computer: paste the 3 values into it, one per field. Never paste them here in the conversation.
 
-Once the user has generated their 3 keys, store them in the **vault** (masked-input window - the values never pass through the chat):
+Then open that window (masked input: the values never pass through the conversation):
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> --name OVH --service OVH --fields "app_key:text,app_secret:secret,consumer_key:secret"
 ```
 
-Then load them into the current session to continue right away:
-```bash
-export OVH_APP_KEY=$(node "$VAULT" get OVH app_key)
-export OVH_APP_SECRET=$(node "$VAULT" get OVH app_secret)
-export OVH_CONSUMER_KEY=$(node "$VAULT" get OVH consumer_key)
-```
+**If the user pastes a key in the conversation anyway**: do not reuse it from there, do not repeat it. Tell them it is now in this conversation's history and that those keys stay valid at OVH until they are deleted there, then have them make new ones (this step again) and open the window again.
 
-Validate by re-running the Step 1 test. If it still fails, check that the user ticked **all** the permissions on the form (the provided link ticks them by default, but OVH may show an additional confirmation screen).
+Validate by re-running the Step 1 check. If OVH still refuses, check that the user ticked **all** the permissions on the form (the provided link ticks them by default, but OVH may show an additional confirmation screen).
 
-## Step 3 - Change the nameservers (2 API calls)
+## Step 3 - Change the nameservers
 
-The OVH API requires **2 steps** to change the NS (verified in the DNSControl source, 2026-05):
-
-1. **Switch the domain to "external" mode** (by default OVH is in "hosted" mode and blocks NS changes)
-2. **Push the new NS list**
-
-### OVH signature helper (paste into the bash session)
+OVH needs **2 calls** to change the NS (verified in the DNSControl source, 2026-05): switch the domain to "external" mode (by default OVH is in "hosted" mode and blocks NS changes), then push the new list. The script makes both, in that order, and reads the list back:
 
 ```bash
-ovh_signed_call() {
-  # Usage: ovh_signed_call METHOD PATH [BODY]
-  local method="$1" path="$2" body="${3:-}"
-  local url="https://eu.api.ovh.com/1.0${path}"
-  local ts
-  ts=$(curl -s https://eu.api.ovh.com/1.0/auth/time)
-  local sig_input="${OVH_APP_SECRET}+${OVH_CONSUMER_KEY}+${method}+${url}+${body}+${ts}"
-  local sig="\$1\$$(printf '%s' "$sig_input" | sha1sum | cut -d' ' -f1)"
-  curl -s -X "$method" \
-    -H "X-Ovh-Application: $OVH_APP_KEY" \
-    -H "X-Ovh-Consumer: $OVH_CONSUMER_KEY" \
-    -H "X-Ovh-Timestamp: $ts" \
-    -H "X-Ovh-Signature: $sig" \
-    -H "Content-Type: application/json" \
-    ${body:+-d "$body"} \
-    -w "\nHTTP:%{http_code}\n" \
-    "$url"
-}
+OVH="${CLAUDE_SKILL_DIR}/../../scripts/registrar-ovh.mjs"
+node "$OVH" set-nameservers <domain> <ns1_cloudflare> <ns2_cloudflare>
 ```
 
-### 3.a - Switch the domain to "external" mode
+The guard asks the user to confirm this command: say which domain and which nameservers before running it. The script refuses (exit 5, nothing sent) a list of fewer than two nameservers or an empty one: if that happens, `NS1`/`NS2` were not read in `/add-domain`'s Step 5, go back there.
 
-```bash
-ovh_signed_call PUT "/domain/<domain>" '{"nameServerType":"external"}'
-```
-
-Expected response: `HTTP:200` (empty body).
-
-### 3.b - Push the new NS list
-
-```bash
-ovh_signed_call POST "/domain/<domain>/nameServers/update" \
-  '{"nameServers":[{"host":"<ns1_cloudflare>"},{"host":"<ns2_cloudflare>"}]}'
-```
-
-Expected response: `HTTP:200` with a `Task` JSON object. The `status` may be `todo` (queued) - that's normal, OVH processes the change asynchronously (a few minutes).
+- **Exit 0**: `task.status` may be `todo` (queued) - that's normal, OVH processes the change asynchronously (a few minutes). `nameServers` is the list read back: it may still show the old nameservers for 5-30 min.
+- **Exit 1**: OVH refused; `step` says where (`external` or `update`) and `error` gives OVH's own words. A refusal at `external` means the keys lack the `PUT /domain/*` right: Step 2 again.
 
 ### 3.c - Verification (optional, may show the old NS for 5-30 min)
 
 ```bash
-ovh_signed_call GET "/domain/<domain>/nameServer"
-# Then for each ID:
-ovh_signed_call GET "/domain/<domain>/nameServer/<id>"
+node "$OVH" nameservers <domain>
 ```
 
 Don't block on this check - OVH's internal propagation takes time. Public DNS propagation (5-30 min) is longer anyway.

@@ -59,44 +59,6 @@ Wait for explicit confirmation before handing control back to `add-domain`.
 
 IONOS announces *"up to 24h"* but in practice it's more like **15 min to 2h** for standard TLDs (`.fr`, `.com`, `.eu`, `.org`). For more exotic country-code TLDs (`.de`, `.at`, `.es`), it can take up to 4h.
 
-## Step 3 (optional) - Set up the IONOS API for later
-
-If the user wants to **later** automate DNS records or Let's Encrypt certificates on their IONOS account, offer to configure the API key now - it will save them from redoing everything in 3 months:
-
-> 💡 **Bonus** (optional): if you want to be able to automate other things on your IONOS account later (DNS records, Let's Encrypt certificates via DNS challenge, zone management…), I can guide you to create an API key now. It takes 2 min and you won't have to think about it again.
->
-> Want to?
-
-If **yes**:
-
-> 1. Go to **https://developer.hosting.ionos.com/keys**
-> 2. Click **Create New Key**
-> 3. **Name**: `Claude Code`
-> 4. Click **Next** → confirm
-> 5. The page displays **2 values**:
->    - **Public Prefix** (short, ~8 characters)
->    - **Secret** (long, ~64 characters)
-> 6. Copy **both immediately** (the secret won't be shown again afterward)
-> 7. Give them to me.
-
-When the user has their 2 values (Public Prefix + Secret), store them in the **vault** (item `IONOS`, masked-input window - they don't pass through the chat):
-
-```bash
-VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
-node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> --name IONOS --service IONOS --fields "prefix:text,secret:secret"
-```
-
-Then rebuild the key (IONOS format = `prefix.secret`) and validate:
-
-```bash
-API_KEY="$(node "$VAULT" get IONOS prefix).$(node "$VAULT" get IONOS secret)"
-HTTP=$(printf 'header = "X-API-Key: %s"\n' "$API_KEY" | curl -s --config - -o /dev/null -w "%{http_code}" \
-  "https://api.hosting.ionos.com/dns/v1/zones")
-[ "$HTTP" = "200" ] && echo "VALID" || echo "INVALID (HTTP $HTTP)"
-```
-
-If **INVALID** → don't block, just tell the user they can redo it later. The NS change from step 1 is already done, that's what matters.
-
 ## Back to add-domain
 
 > ✅ Nameservers for the domain `<domain>` pointed to Cloudflare. Propagation: 15 min to 2h in most cases (IONOS announces up to 24h but that's pessimistic for standard TLDs).

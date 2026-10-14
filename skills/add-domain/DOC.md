@@ -20,19 +20,21 @@ The target architecture: **your registrar → Cloudflare (DNS + Email Routing) �
 
 4. **Creating the Cloudflare zone**: Hypervibe adds your domain to your Cloudflare account and retrieves the **2 assigned nameservers**.
 
-5. **Changing the nameservers at the registrar**: depending on your registrar, Hypervibe calls its API directly (Hostinger, OVH, Namecheap, Gandi, Porkbun, LWS…) with your access key stored in your vault, and pushes the new nameservers (at LWS, you also allow your computer's address once, on the page where the key is created). For registrars whose API does not allow it (Infomaniak, IONOS, Squarespace, GoDaddy), you'll do it by hand (clear instructions provided).
+5. **Carrying what the domain already carries**: before the switch, Hypervibe surveys what your domain already carries (its mail, its verifications, a blog or a shop on a subdomain) and copies it into the new zone: your mail keeps arriving. If something could not be read, the switch waits.
 
-6. **Configuring the DNS records**: Hypervibe deletes the old records and adds the Vercel ones (`A` apex → 76.76.21.21, `CNAME` www → `cname.vercel-dns.com`).
+6. **Changing the nameservers at the registrar**: depending on your registrar, Hypervibe calls its API directly (Hostinger, OVH, Namecheap, Gandi, Porkbun, LWS…) with your access key stored in your vault, and pushes the new nameservers (at LWS, you also allow your computer's address once, on the page where the key is created). For registrars whose API does not allow it (Infomaniak, IONOS, Squarespace, GoDaddy), you'll do it by hand (clear instructions provided).
 
-7. **Connecting to Vercel**: Hypervibe adds the domain on the Vercel side (via `vercel domains add`).
+7. **Configuring the DNS records**: Hypervibe deletes the old records and adds the Vercel ones (`A` apex → 76.76.21.21, `CNAME` www → `cname.vercel-dns.com`).
 
-8. **Updating the URL in the code**: `NEXT_PUBLIC_APP_URL` is updated everywhere, and all references to `*.vercel.app` in the code (sitemap, metadata, JSON-LD, robots.txt, legal pages) are replaced by your new domain, crucial for SEO.
+8. **Connecting to Vercel**: Hypervibe adds the domain on the Vercel side (via `vercel domains add`).
 
-9. **Email Routing (optional)**: Hypervibe offers to set up receiving emails on your domain. If yes, it delegates to `/new-email-address` to create a first address (for example `contact@mysite.com` → your Gmail).
+9. **Updating the URL in the code**: `NEXT_PUBLIC_APP_URL` is updated everywhere, and all references to `*.vercel.app` in the code (sitemap, metadata, JSON-LD, robots.txt, legal pages) are replaced by your new domain, crucial for SEO.
 
-10. **Resend (optional)**: if Resend is already configured on the project, Hypervibe also offers to switch the email sending to your new domain (`contact@mysite.com` instead of `onboarding@resend.dev`).
+10. **Email Routing (optional)**: Hypervibe offers to set up receiving emails on your domain. If yes, it delegates to `/new-email-address` to create a first address (for example `contact@mysite.com` → your Gmail). If your domain already receives its mail at a mail provider (Google Workspace, Microsoft 365...), it does not turn it on: the address is then created at that provider.
 
-11. **Commit + deploy**: the code changes are committed and pushed to redeploy.
+11. **Resend (optional)**: if Resend is already configured on the project, Hypervibe also offers to switch the email sending to your new domain (`contact@mysite.com` instead of `onboarding@resend.dev`).
+
+12. **Commit + deploy**: the code changes are committed and pushed to redeploy.
 
 ## What it creates for you
 

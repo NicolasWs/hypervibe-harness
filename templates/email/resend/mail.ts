@@ -1,6 +1,19 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+/**
+ * The client is built at the first send, not when this module loads: Resend's SDK refuses to be
+ * built without a key, and every router that sends mail imports this module. Built at load, a
+ * project whose key is not set yet (a collaborator's project before the administrator branches
+ * the organisation's key) lost its whole API, every route and not only email (Hypervibe 3.4.11).
+ */
+let client: Resend | null = null;
+function resend(): Resend {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("sendMail: RESEND_API_KEY is not set, email is not configured for this project yet.");
+  }
+  client ??= new Resend(process.env.RESEND_API_KEY);
+  return client;
+}
 
 /**
  * Escape HTML special characters to prevent injection in email templates.
@@ -44,7 +57,7 @@ function refuseLocalLinks(subject: string, ...bodies: (string | undefined)[]): v
 
 export async function sendMail(options: SendMailOptions) {
   refuseLocalLinks(options.subject, options.html, options.text);
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await resend().emails.send({
     from: options.from ?? process.env.RESEND_FROM_EMAIL!,
     to: options.to,
     subject: options.subject,

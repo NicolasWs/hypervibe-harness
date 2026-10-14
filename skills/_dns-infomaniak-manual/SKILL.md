@@ -61,44 +61,6 @@ Wait for explicit confirmation before handing control back to `add-domain`.
 
 Infomaniak officially states *"up to 48h of propagation"* in its interface. In practice, it's more like **15 min to 2h** for most TLDs, but don't worry if the DNS check (Step 8 of `add-domain`) takes a while - it can go up to 24h with them depending on the TLD (notably `.ch`, `.swiss`, and certain national TLDs).
 
-## Step 3 (optional) - Setting up the Infomaniak Personal Access Token
-
-If the user wants to **later** automate other Infomaniak operations (manage DNS records, create mailboxes, etc.), offer to set up a PAT now - it'll save them from redoing everything in 3 months:
-
-> 💡 **Bonus** (optional): if you want to be able to automate other things on your Infomaniak account later (DNS records, mailboxes, Let's Encrypt certificates via DNS challenge…), I can guide you to create an API token now. It takes 2 min and you won't have to think about it again.
->
-> Want to?
-
-If **yes**:
-
-> 1. Go to **https://manager.infomaniak.com/v3/ng/profile/user/token/list**
-> 2. Click **Créer un token** (*Create a token*)
-> 3. **Name**: `Claude Code`
-> 4. **Application**: choose *"API Infomaniak"* (generic - covers all services)
-> 5. **Scope**: select `domain:read`, `dns:read`, `dns:write` (at minimum)
-> 6. **Validity**: choose **Illimitée** (Unlimited) (or 1 year if you prefer)
-> 7. Confirm with your Infomaniak password
-> 8. **Copy the token immediately** (it won't be shown again afterward)
-> 9. A small window will then open on your machine: paste the token in there, not in our conversation, so it never gets written into this chat.
-
-When the user has created their token, store it in the **vault** (item `INFOMANIAK`, masked-input window - the value does not pass through the chat):
-
-```bash
-VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
-node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> --name INFOMANIAK --service Infomaniak --fields api_token:secret
-```
-
-Then load it and validate it:
-
-```bash
-export INFOMANIAK_API_TOKEN=$(node "$VAULT" get INFOMANIAK api_token)
-HTTP=$(printf 'header = "Authorization: Bearer %s"\n' "$INFOMANIAK_API_TOKEN" | curl -s --config - -o /dev/null -w "%{http_code}" \
-  "https://api.infomaniak.com/1/profile")
-[ "$HTTP" = "200" ] && echo "VALID" || echo "INVALID (HTTP $HTTP)"
-```
-
-If **INVALID** → don't block, just let the user know they can redo the PAT later (the NS change from step 1 has already been done, so that's the essential part).
-
 ## Back to add-domain
 
 > ✅ Nameservers for domain `<domain>` pointed to Cloudflare. Propagation: 15 min to 2h in the majority of cases (Infomaniak may indicate up to 48h in its UI but that's very pessimistic for standard TLDs).

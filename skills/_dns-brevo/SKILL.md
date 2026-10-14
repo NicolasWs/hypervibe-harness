@@ -76,6 +76,8 @@ The Cloudflare token (`$CFTOK`) comes from the vault (Preamble above).
 ### 3.a - Get the zone ID
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 ZONE_ID=$(printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - \
   "https://api.cloudflare.com/client/v4/zones?name=<domain>" \
   | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(d.result?.[0]?.id || '');")
@@ -88,6 +90,8 @@ If `ZONE_ID` is empty -> abort (the zone must exist, `/add-domain` created it ju
 For each of the three records (`brevo_code`, `dkim_record`, `dmarc_record`), set `name` to its `host_name` (use the domain root `<domain>` when `host_name` is `@`, otherwise `<host_name>.<domain>`) and `content` to its `value`:
 
 ```bash
+VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
+CFTOK=$(node "$VAULT" get CLOUDFLARE api_token)
 printf 'header = "Authorization: Bearer %s"\n' "$CFTOK" | curl -s --config - -X POST \
   -H "Content-Type: application/json" \
   -d "{\"type\":\"TXT\",\"name\":\"<name>\",\"content\":\"<value>\",\"ttl\":3600,\"proxied\":false}" \

@@ -65,9 +65,9 @@ Guide the user:
 > 4. Click **Create API Key**
 > 5. A box shows the **API Key** + **Secret API Key** - copy **both immediately**, the secret will not be shown again afterwards
 >
-> Give me the 2 values (API Key + Secret).
+> 6. A window will open on your computer: paste the 2 values into it. Never paste them here in the conversation.
 
-Store them in the **vault** once received (masked-input window - the values do not pass through the chat):
+Then open that window (masked input: the values never pass through the conversation). If the user pastes a key in the conversation anyway, do not reuse it from there, do not repeat it: tell them it is now in this conversation's history and stays valid until it is deleted at Porkbun, then open the window.
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> --name PORKBUN --service Porkbun --fields "api_key:secret,secret_key:secret"
